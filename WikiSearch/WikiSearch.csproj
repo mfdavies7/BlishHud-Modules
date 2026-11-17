@@ -15,4 +15,9 @@
     <Reference Include="System.ComponentModel.Composition" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Settings panel shared by every module in this repo -->
+    <Compile Include="..\Shared\SettingsWithValuesView.cs" Link="Shared\SettingsWithValuesView.cs" />
+  </ItemGroup>
+
 </Project>

@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Controls.Extern;
+using Blish_HUD.Graphics.UI;
 using Blish_HUD.Input;
 using Blish_HUD.Modules;
 using Blish_HUD.Settings;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using ModuleShared;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
 namespace WikiSearch
@@ -66,8 +68,8 @@ namespace WikiSearch
                 () => "Put back what you had copied before. The module uses the clipboard to type the /wiki command.");
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 40,
                 () => "Key press delay (ms)",
-                () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent.");
-            _keyDelayMs.SetRange(10, 250);
+                () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
+            _keyDelayMs.SetRange(1, 250);
             _waitForShiftRelease = settings.DefineSetting("WaitForShiftRelease", false,
                 () => "Wait for Shift release before sending",
                 () => "Only type the /wiki command after you let go of Shift. Turn on if the command is sometimes missing or the item link gets replaced.");
@@ -75,6 +77,8 @@ namespace WikiSearch
                 () => "Show hint while holding Shift",
                 () => "Show a hint next to the cursor while Shift is held and a click would open the wiki.");
         }
+
+        public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
 
         protected override void Initialize()
         {

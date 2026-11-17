@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>WaypointPaste</AssemblyName>
+    <RootNamespace>WaypointPaste</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Blish HUD supplies these at runtime, so keep them out of the .bhm -->
+    <PackageReference Include="BlishHUD" Version="1.3.0" ExcludeAssets="runtime;analyzers" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.ComponentModel.Composition" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Settings panel shared by every module in this repo -->
+    <Compile Include="..\Shared\SettingsWithValuesView.cs" Link="Shared\SettingsWithValuesView.cs" />
+  </ItemGroup>
+
+</Project>
