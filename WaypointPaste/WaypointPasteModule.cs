@@ -89,11 +89,11 @@ namespace WaypointPaste
             _clickWaitMs = settings.DefineSetting("ClickWaitMs", 500,
                 () => "Wait before clicking link (ms)",
                 () => "Time for the whisper to show up in chat before the link is clicked. Raise it if the click sometimes misses the link.");
-            _clickWaitMs.SetRange(0, 3000);
+            _clickWaitMs.SetRange(20, 3000);
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 40,
                 () => "Key press delay (ms)",
                 () => "Time between simulated key presses. Raise it if the whisper is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
-            _keyDelayMs.SetRange(1, 250);
+            _keyDelayMs.SetRange(20, 250);
         }
 
         public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);

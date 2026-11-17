@@ -70,7 +70,7 @@ namespace WikiSearch
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 40,
                 () => "Key press delay (ms)",
                 () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
-            _keyDelayMs.SetRange(1, 250);
+            _keyDelayMs.SetRange(20, 250);
             _waitForShiftRelease = settings.DefineSetting("WaitForShiftRelease", false,
                 () => "Wait for Shift release before sending",
                 () => "Only type the /wiki command after you let go of Shift. Turn on if the command is sometimes missing or the item link gets replaced.");
