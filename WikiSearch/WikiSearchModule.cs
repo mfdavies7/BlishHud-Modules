@@ -119,6 +119,7 @@ namespace WikiSearch
 
         protected override void Unload()
         {
+            _toggleKey.Value.Enabled = false;
             _toggleKey.Value.Activated -= ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
             _waitForShiftRelease.SettingChanged -= WaitForShiftRelease_SettingChanged;

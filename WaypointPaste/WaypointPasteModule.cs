@@ -15,6 +15,8 @@ using Microsoft.Xna.Framework.Input;
 using ModuleShared;
 using static ModuleShared.ChatInput;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
+using Mouse = Blish_HUD.Controls.Intern.Mouse;
+using MouseButton = Blish_HUD.Controls.Intern.MouseButton;
 
 namespace WaypointPaste
 {
@@ -29,15 +31,6 @@ namespace WaypointPaste
         // Put on the clipboard before copying the chat box; still there afterwards means the box was empty.
         private const string DraftCheckMarker = "WaypointPaste:empty-chat-check";
 
-        private const uint MouseEventLeftDown = 0x0002;
-        private const uint MouseEventLeftUp = 0x0004;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct NativePoint { public int X, Y; }
-
-        [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
-        [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
-        [DllImport("user32.dll")] private static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extraInfo);
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
 
         // The desktop across all monitors; a monitor left of or above the main one has negative coordinates.
@@ -115,13 +108,15 @@ namespace WaypointPaste
 
         protected override void Unload()
         {
+            _pasteKey.Value.Enabled = false;
             _pasteKey.Value.Activated -= PasteKey_Activated;
+            _setClickPositionKey.Value.Enabled = false;
             _setClickPositionKey.Value.Activated -= SetClickPositionKey_Activated;
         }
 
         private void SetClickPositionKey_Activated(object sender, EventArgs e)
         {
-            if (!GetCursorPos(out var cursor)) return;
+            var cursor = Mouse.GetPosition();
             _clickX.Value = cursor.X;
             _clickY.Value = cursor.Y;
             ScreenNotification.ShowNotification("Waypoint Paste: chat link click position saved.");
@@ -253,25 +248,26 @@ namespace WaypointPaste
             await Task.Delay(_clickWaitMs.Value);
             EnsureSafe(chatOpen: false);
 
-            if (!GetCursorPos(out var previous)) throw new AbortException("couldn't read the mouse position.");
+            var previous = Mouse.GetPosition();
             bool buttonDown = false;
             try
             {
-                SetCursorPos(_clickX.Value, _clickY.Value);
+                // sendToSystem: screen coordinates, and real input rather than window messages, as GW2 needs the cursor over the link.
+                Mouse.SetPosition(_clickX.Value, _clickY.Value, true);
                 await Task.Delay(delay); // let GW2 see the cursor over the link before clicking
                 EnsureSafe(chatOpen: false);
-                mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+                Mouse.Press(MouseButton.LEFT, sendToSystem: true);
                 buttonDown = true;
                 await Task.Delay(delay); // GW2 reads input once per frame
-                mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+                Mouse.Release(MouseButton.LEFT, sendToSystem: true);
                 buttonDown = false;
                 await Task.Delay(delay);
             }
             finally
             {
                 // Never leave the left button held down, and give the player their cursor back.
-                if (buttonDown) mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
-                SetCursorPos(previous.X, previous.Y);
+                if (buttonDown) Mouse.Release(MouseButton.LEFT, sendToSystem: true);
+                Mouse.SetPosition(previous.X, previous.Y, true);
             }
         }
 
