@@ -13,6 +13,7 @@ using Blish_HUD.Settings;
 using Gw2Sharp.ChatLinks;
 using Microsoft.Xna.Framework.Input;
 using ModuleShared;
+using static ModuleShared.ChatInput;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
 namespace WaypointPaste
@@ -144,12 +145,15 @@ namespace WaypointPaste
         private async Task PasteWaypointAsync()
         {
             _busy = true;
+            // Restore even an empty clipboard, so the "/s " typed last isn't left behind.
+            bool restoreClipboard = false;
             string previousClipboard = null;
             try
             {
                 int delay = _keyDelayMs.Value;
                 string clipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync();
-                if (_restoreClipboard.Value) previousClipboard = clipboard;
+                restoreClipboard = _restoreClipboard.Value;
+                previousClipboard = clipboard ?? "";
 
                 string waypoint = _useClipboardFirst.Value && IsPointOfInterest(clipboard) ? clipboard.Trim() : _waypoint.Value.Trim();
                 if (!IsPointOfInterest(waypoint)) throw new AbortException("the saved waypoint chat code isn't valid.");
@@ -162,8 +166,7 @@ namespace WaypointPaste
                 if (!await WaitAsync(() => !GameService.Input.Keyboard.KeysDown.Any(Modifiers.Contains), 2000))
                     throw new AbortException("let go of Shift, Ctrl and Alt and try again.");
 
-                EnsureSafe(chatOpen: false);
-                Keyboard.Stroke(VirtualKeyShort.RETURN, true);
+                Stroke(VirtualKeyShort.RETURN, chatOpen: false);
                 if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
                     throw new AbortException("chat didn't open.");
                 await Task.Delay(delay);
@@ -178,8 +181,7 @@ namespace WaypointPaste
                     }
 
                     // The text is still selected from the check, so Backspace deletes all of it.
-                    EnsureSafe(chatOpen: true);
-                    Keyboard.Stroke(VirtualKeyShort.BACK, true);
+                    Stroke(VirtualKeyShort.BACK, chatOpen: true);
                     await Task.Delay(delay);
 
                     // A missed key press would send the old text along with the whisper.
@@ -197,8 +199,7 @@ namespace WaypointPaste
                 {
                     if (text == null)
                     {
-                        EnsureSafe(chatOpen: true);
-                        Keyboard.Stroke(VirtualKeyShort.TAB, true);
+                        Stroke(VirtualKeyShort.TAB, chatOpen: true);
                         await Task.Delay(delay);
                         continue;
                     }
@@ -207,23 +208,20 @@ namespace WaypointPaste
                     await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
                 }
 
-                EnsureSafe(chatOpen: true);
-                Keyboard.Stroke(VirtualKeyShort.RETURN, true);
+                Stroke(VirtualKeyShort.RETURN, chatOpen: true);
                 if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
                     throw new AbortException("whisper may not have been sent; chat is still open.");
                 await Task.Delay(delay);
 
                 // Otherwise the next message the player types would also be whispered to themselves.
                 // Enter on the now-empty box closes chat without sending anything (Escape could open the game menu).
-                EnsureSafe(chatOpen: false);
-                Keyboard.Stroke(VirtualKeyShort.RETURN, true);
+                Stroke(VirtualKeyShort.RETURN, chatOpen: false);
                 if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
                     throw new AbortException("whisper sent, but chat didn't reopen to switch back to /s.");
                 await Task.Delay(delay);
                 await SetClipboardAsync("/s ");
                 await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
-                EnsureSafe(chatOpen: true);
-                Keyboard.Stroke(VirtualKeyShort.RETURN, true);
+                Stroke(VirtualKeyShort.RETURN, chatOpen: true);
                 if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
                     throw new AbortException("whisper sent, but chat didn't close after switching back to /s.");
 
@@ -240,7 +238,7 @@ namespace WaypointPaste
             }
             finally
             {
-                if (previousClipboard != null)
+                if (restoreClipboard)
                     await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
                 _busy = false;
             }
@@ -291,73 +289,11 @@ namespace WaypointPaste
             return !string.IsNullOrEmpty(copied) && copied != DraftCheckMarker;
         }
 
-        private static async Task SetClipboardAsync(string text)
-        {
-            if (await ClipboardUtil.WindowsClipboardService.SetTextAsync(text)) return;
-
-            // Another program may be holding the clipboard open.
-            Logger.Warn("Could not write to the clipboard.");
-            throw new AbortException("couldn't use the clipboard. Try again.");
-        }
-
-        /// <summary>GW2 reads keys once per frame, so Ctrl must be held for a moment before the key counts as a shortcut.</summary>
-        private static async Task CtrlStrokeAsync(VirtualKeyShort key, int delay)
-        {
-            EnsureSafe(chatOpen: true);
-            Keyboard.Press(VirtualKeyShort.LCONTROL, true);
-            try
-            {
-                await Task.Delay(delay);
-                EnsureSafe(chatOpen: true);
-                Keyboard.Stroke(key, true);
-                await Task.Delay(delay);
-            }
-            finally
-            {
-                // Never leave a simulated Ctrl held down system-wide.
-                Keyboard.Release(VirtualKeyShort.LCONTROL, true);
-            }
-            await Task.Delay(delay);
-        }
-
-        /// <summary>
-        /// Keys are sent system-wide, so stop before each one if GW2 lost focus (they'd go to another app)
-        /// or chat closed (V, Tab and Enter would act as game keys: dodge, target, open chat).
-        /// </summary>
-        private static bool IsSafe(bool chatOpen)
-        {
-            var gw2 = GameService.GameIntegration.Gw2Instance;
-            return gw2.IsInGame && gw2.Gw2HasFocus && GameService.Gw2Mumble.UI.IsTextInputFocused == chatOpen;
-        }
-
-        private static void EnsureSafe(bool chatOpen)
-        {
-            var gw2 = GameService.GameIntegration.Gw2Instance;
-            if (!gw2.Gw2HasFocus) throw new AbortException("stopped because Guild Wars 2 lost focus.");
-            if (!gw2.IsInGame) throw new AbortException("stopped because you left the game (loading screen?).");
-            if (GameService.Gw2Mumble.UI.IsTextInputFocused != chatOpen)
-                throw new AbortException(chatOpen ? "stopped because chat closed." : "close chat first.");
-        }
-
-        private sealed class AbortException : Exception
-        {
-            public AbortException(string message) : base(message) { }
-        }
-
         /// <summary>Waypoints, points of interest and vistas all share the PointOfInterest link type.</summary>
         private static bool IsPointOfInterest(string text) =>
             !string.IsNullOrWhiteSpace(text)
             && Gw2ChatLink.TryParse(text.Trim(), out IGw2ChatLink link)
             && link?.Type == ChatLinkType.PointOfInterest;
 
-        private static async Task<bool> WaitAsync(Func<bool> condition, int timeoutMs)
-        {
-            for (int waited = 0; waited < timeoutMs; waited += 10)
-            {
-                if (condition()) return true;
-                await Task.Delay(10);
-            }
-            return false;
-        }
     }
 }

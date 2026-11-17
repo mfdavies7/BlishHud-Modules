@@ -13,7 +13,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ModuleShared;
-using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
+using static ModuleShared.ChatInput;
 
 namespace WikiSearch
 {
@@ -40,6 +40,7 @@ namespace WikiSearch
         private HintBox _hint;
         private Texture2D _hintIcon;
         private bool _busy;
+
         [ImportingConstructor]
         public WikiSearchModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters) { }
 
@@ -162,58 +163,39 @@ namespace WikiSearch
         private async Task RunWikiSearchAsync()
         {
             _busy = true;
-            bool ctrlHeld = false;
+            bool restoreClipboard = false;
+            string previousClipboard = null;
             try
             {
                 int delay = _keyDelayMs.Value;
 
-                // Let GW2 open chat and put the item link in it.
+                // Let GW2 open chat and put the item link in it. No chat means the click wasn't on an item.
                 await Task.Delay(50);
-                if (!await WaitForChatAsync()) return;
-                if (_waitForShiftRelease.Value && !await WaitForShiftReleaseAsync()) return;
+                if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000)) return;
+                if (_waitForShiftRelease.Value && !await WaitAsync(() => !IsShiftDown(), 5000)) return;
                 await Task.Delay(delay);
 
-                string previousClipboard = _restoreClipboard.Value
-                    ? await ClipboardUtil.WindowsClipboardService.GetTextAsync()
-                    : null;
-                if (!await ClipboardUtil.WindowsClipboardService.SetTextAsync(GetWikiCommand()))
-                {
-                    // Another program may be holding the clipboard open.
-                    Logger.Warn("Could not write the /wiki command to the clipboard.");
-                    ScreenNotification.ShowNotification("Wiki Search: couldn't use the clipboard. Try again.", ScreenNotification.NotificationType.Warning);
-                    return;
-                }
+                restoreClipboard = _restoreClipboard.Value;
+                previousClipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync() ?? "";
+                await SetClipboardAsync(GetWikiCommand());
 
-                // The player may still be holding Shift, which would turn Home into "select to start".
-                // Shift is lifted right before each key so key repeat has no time to press it again.
-                // GW2 reads keys once per frame, so Ctrl must be held for a moment before V counts as Ctrl+V.
-                ReleaseShift();
-                Keyboard.Stroke(VirtualKeyShort.HOME, true);
+                Stroke(VirtualKeyShort.HOME);
                 await Task.Delay(delay);
+                await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                Stroke(VirtualKeyShort.RETURN);
 
-                Keyboard.Press(VirtualKeyShort.LCONTROL, true);
-                ctrlHeld = true;
-                await Task.Delay(delay);
-                ReleaseShift();
-                Keyboard.Stroke(VirtualKeyShort.KEY_V, true);
-                await Task.Delay(delay);
-                Keyboard.Release(VirtualKeyShort.LCONTROL, true);
-                ctrlHeld = false;
-                await Task.Delay(delay);
-
-                ReleaseShift();
-                Keyboard.Stroke(VirtualKeyShort.RETURN, true);
-
-                // Give GW2 time to read the paste and open the browser.
+                // Give GW2 time to read the command and open the browser before the clipboard changes back.
                 await Task.Delay(300);
-                if (previousClipboard != null)
-                    await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
 
                 if (_returnFocusToGame.Value)
                 {
                     await Task.Delay(500);
                     GameService.GameIntegration.Gw2Instance.FocusGw2();
                 }
+            }
+            catch (AbortException ex)
+            {
+                ScreenNotification.ShowNotification($"Wiki Search: {ex.Message}", ScreenNotification.NotificationType.Warning);
             }
             catch (Exception ex)
             {
@@ -222,36 +204,10 @@ namespace WikiSearch
             }
             finally
             {
-                // Never leave a simulated Ctrl held down system-wide.
-                if (ctrlHeld) Keyboard.Release(VirtualKeyShort.LCONTROL, true);
+                if (restoreClipboard)
+                    await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
                 _busy = false;
             }
-        }
-
-        private static async Task<bool> WaitForChatAsync()
-        {
-            for (int waited = 0; waited < 1000; waited += 10)
-            {
-                if (GameService.Gw2Mumble.UI.IsTextInputFocused) return true;
-                await Task.Delay(10);
-            }
-            return false;
-        }
-
-        private static async Task<bool> WaitForShiftReleaseAsync()
-        {
-            for (int waited = 0; waited < 5000; waited += 10)
-            {
-                if (!IsShiftDown()) return true;
-                await Task.Delay(10);
-            }
-            return false;
-        }
-
-        private static void ReleaseShift()
-        {
-            Keyboard.Release(VirtualKeyShort.LSHIFT, true);
-            Keyboard.Release(VirtualKeyShort.RSHIFT, true);
         }
 
         private static bool IsShiftDown()

@@ -1,11 +1,15 @@
-# Wiki Search (Blish HUD module)
+# Blish HUD modules
+
+Guild Wars 2 quality-of-life modules for [Blish HUD](https://blishhud.com).
+
+## Wiki Search
 
 Shift + left-click an item in Guild Wars 2 to open its wiki page.
 
 GW2 puts the item's chat link in the chat box; the module adds `/wiki ` in front of it and presses Enter, so the game opens the wiki in your browser.
 Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scratch.
 
-## Settings
+### Settings
 
 - **Wiki language** – Game Language, English, German, French or Spanish.
 - **Toggle hotkey** – switch the Enabled setting on or off.
@@ -20,22 +24,12 @@ Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scra
 
 The hint can't tell whether the cursor is over an item; Blish HUD and GW2 don't expose that.
 
-## Build
-
-Requires the .NET SDK.
-
-```
-dotnet build WikiSearch -c Release
-```
-
-The module is written to `WikiSearch/bin/Release/WikiSearch.bhm`. Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
-
-# Waypoint Paste (Blish HUD module)
+## Waypoint Paste
 
 Press a hotkey to whisper a waypoint chat link to your own character. The link shows up in chat, ready to click or share. Afterwards chat is switched back to `/s`, so your next message isn't whispered to yourself.
 Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from scratch.
 
-## Settings
+### Settings
 
 - **Paste waypoint hotkey** – unset by default. Only works in game with chat closed; with chat open it asks you to close it first. It stops and tells you why if you alt-tab, chat closes, or a loading screen starts partway through.
 - **Waypoint chat code** (`[&BCAJAAA=]`) – shift-click a waypoint on the map to get its code. Invalid codes show a warning instead of sending.
@@ -48,9 +42,16 @@ Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from s
 - **Wait before clicking link** (500 ms, 0–3000) – raise it if the click sometimes happens before the whisper shows up in chat.
 - **Key press delay** (40 ms, 1–250) – raise it if the whisper is sometimes typed wrong.
 
+## Build
+
+Requires the .NET SDK.
+
 ```
+dotnet build WikiSearch -c Release
 dotnet build WaypointPaste -c Release
 ```
+
+Each module is written to `<Module>/bin/Release/<Module>.bhm`. Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Credits
 
