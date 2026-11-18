@@ -66,8 +66,8 @@ Open it with the magnifier icon at the top left or the hotkey, and type. Results
 
 - **Click** a result to copy its chat link (changeable in settings). For an NPC, that's the waypoint nearest to them.
 - **Enter** copies the top result, closes the window and returns to the game, ready to paste.
-- **Right-click** a result for the menu (changeable in settings): copy, paste into chat or whisper to yourself; Show on map; Copy /wiki command; Open wiki page; Add to / Remove from favourites; Clear map marker. **Shift-click** always opens the menu.
-- **Show on map** marks the result on the world map (M). If it's off screen, the marker sits at the screen edge pointing the way. Clear it with the Clear map marker hotkey or from the menu.
+- **Right-click** a result for the menu (changeable in settings): copy, paste into chat or whisper to yourself; Show on map / Remove from map; Copy /wiki command; Open wiki page; Add to / Remove from favourites; Clear all map markers. **Shift-click** always opens the menu.
+- **Show on map** marks the result on the world map (M); you can mark several at once. If one is off screen, its marker sits at the screen edge pointing the way. Remove one from its menu, or all with the **Clear markers** button next to the status line, the menu or the Clear map markers hotkey.
 - With the search box empty, the window shows your favourites. Item names are coloured by rarity. Results without a game icon (most NPCs, many wiki pages) get a plain one for their kind.
 - If nothing matches, it asks the wiki live and lists the pages it finds (places, NPCs, objects, items), placed on the map and linked to their nearest waypoint where possible. Item pages get the item's chat link. A last result opens the full wiki search in your browser.
 
@@ -87,7 +87,7 @@ Results are searchable as each part arrives. **Update data** in the settings dow
 - **Second search language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
 - **Open map on Show on map** (on) – opens the world map after Show on map, if it isn't open already.
 - **Game's map key** (M) – the World Map key from the game's Control Options, pressed by Open map on Show on map.
-- **Clear map marker hotkey** (unbound) – removes the map marker, also while the map is open.
+- **Clear map markers hotkey** (unbound) – removes all map markers, also while the map is open.
 - **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
 - **Search items** (on).
 - **Restore clipboard** (on) – put back what you had copied after Paste into chat or Whisper to yourself.

@@ -50,6 +50,7 @@ namespace TyriaSearch
         private readonly TextBox _query;
         private readonly Dropdown _category;
         private readonly Label _status;
+        private readonly StandardButton _clearMarkers;
         private readonly FlowPanel _results;
         private readonly ContextMenuStrip _menu;
 
@@ -94,6 +95,7 @@ namespace TyriaSearch
 
             int width = _window.ContentRegion.Width;
             const int categoryWidth = 160;
+            const int clearWidth = 140;
 
             _query = new TextBox
             {
@@ -119,11 +121,21 @@ namespace TyriaSearch
             {
                 Parent = _window,
                 Location = new Point(2, 36),
-                Size = new Point(width - 4, 24),
+                Size = new Point(width - 4 - clearWidth, 24),
                 Font = GameService.Content.DefaultFont12,
                 TextColor = new Color(200, 200, 200),
                 VerticalAlignment = VerticalAlignment.Middle,
             };
+
+            _clearMarkers = new StandardButton
+            {
+                Parent = _window,
+                Location = new Point(width - clearWidth, 36),
+                Size = new Point(clearWidth, 24),
+                BasicTooltipText = "Remove all Show on map markers from the world map.",
+                Visible = false,
+            };
+            _clearMarkers.Click += (_, __) => _module.ClearMapMarker();
 
             _results = new FlowPanel
             {
@@ -171,6 +183,10 @@ namespace TyriaSearch
                 _pending = null;
                 ShowResults(pending);
             }
+
+            int markers = _module.MapMarkerCount;
+            _clearMarkers.Visible = markers > 0;
+            _clearMarkers.Text = markers == 1 ? "Clear map marker" : $"Clear {markers} markers";
 
             _status.Text = _message != null && DateTime.UtcNow < _messageUntil ? _message : StatusText();
         }
@@ -404,8 +420,10 @@ namespace TyriaSearch
                 yield return Add($"Paste {link} into chat", () => _module.PasteIntoChat(item), "Open chat and paste the link, ready to send.");
                 yield return Add($"Whisper {link} to yourself", () => _module.WhisperToSelf(item), "Whisper the link to your own character so you can click it in chat.");
             }
-            if (entry.X.HasValue)
-                yield return Add("Show on map", () => _module.ShowOnMap(item), "Mark it on the world map. Open the map (M) to see it.");
+            if (_module.IsMarked(item))
+                yield return Add("Remove from map", () => _module.RemoveMapMarker(item), "Remove this result's marker from the world map.");
+            else if (entry.X.HasValue)
+                yield return Add("Show on map", () => _module.ShowOnMap(item), "Mark it on the world map, alongside any other markers. Open the map (M) to see it.");
             yield return Add("Copy /wiki command", () => _module.CopyWikiCommand(item), "Paste it in chat to open the wiki page.");
             yield return Add("Open wiki page", () => _module.OpenWiki(item), "Open the wiki in your browser.");
             // Live wiki results aren't kept, so they can't be favourites.
@@ -415,8 +433,8 @@ namespace TyriaSearch
                     ? Add("Remove from favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.")
                     : Add("Add to favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.");
             }
-            if (_module.HasMapMarker)
-                yield return Add("Clear map marker", _module.ClearMapMarker, "Remove the marker from the world map.");
+            if (_module.MapMarkerCount > 0)
+                yield return Add("Clear all map markers", _module.ClearMapMarker, "Remove every marker from the world map.");
         }
 
         public void Dispose()

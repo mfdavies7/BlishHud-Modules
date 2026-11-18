@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
@@ -8,7 +9,7 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TyriaSearch
 {
     /// <summary>
-    /// Marks one search result on the world map while the map is open. Covers the whole screen but never takes clicks.
+    /// Marks search results on the world map while the map is open. Covers the whole screen but never takes clicks.
     /// </summary>
     internal sealed class MapMarker : Control
     {
@@ -18,7 +19,7 @@ namespace TyriaSearch
         private readonly Func<int, int> _continentOf;
         private readonly Func<SearchEntry, AsyncTexture2D> _iconFor;
 
-        public SearchItem Target { get; set; }
+        public List<SearchItem> Targets { get; } = new List<SearchItem>();
 
         /// <param name="continentOf">Continent of a map id: Tyria (1) or the Mists (2).</param>
         public MapMarker(Func<int, int> continentOf, Func<SearchEntry, AsyncTexture2D> iconFor)
@@ -31,9 +32,15 @@ namespace TyriaSearch
 
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
-            var entry = Target?.Entry;
             var ui = GameService.Gw2Mumble.UI;
-            if (entry?.X == null || entry.Y == null || !ui.IsMapOpen || ui.MapScale <= 0) return;
+            if (!ui.IsMapOpen || ui.MapScale <= 0) return;
+            foreach (var target in Targets) PaintMarker(spriteBatch, target.Entry);
+        }
+
+        private void PaintMarker(SpriteBatch spriteBatch, SearchEntry entry)
+        {
+            var ui = GameService.Gw2Mumble.UI;
+            if (entry.X == null || entry.Y == null) return;
             // The map shows the continent the player is on.
             if (_continentOf(entry.MapId) != _continentOf(GameService.Gw2Mumble.CurrentMap.Id)) return;
 

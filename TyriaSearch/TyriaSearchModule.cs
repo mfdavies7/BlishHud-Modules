@@ -86,7 +86,13 @@ namespace TyriaSearch
         internal ResultAction RightClick => _rightClick.Value;
         internal IReadOnlyList<string> Favourites => _favourites.Value;
         internal bool IsFavourite(SearchItem item) => _favourites.Value.Contains(item.Entry.Key);
-        internal bool HasMapMarker => _mapMarker?.Target != null;
+        internal int MapMarkerCount => _mapMarker?.Targets.Count ?? 0;
+
+        // Index rebuilds create new entries, so match by what the marker shows rather than by reference.
+        private SearchItem MarkerFor(SearchItem item) => _mapMarker.Targets.FirstOrDefault(t =>
+            t.Entry.Name == item.Entry.Name && t.Entry.MapId == item.Entry.MapId && t.Entry.X == item.Entry.X && t.Entry.Y == item.Entry.Y);
+
+        internal bool IsMarked(SearchItem item) => MarkerFor(item) != null;
 
         protected override void DefineSettings(SettingCollection settings)
         {
@@ -94,8 +100,8 @@ namespace TyriaSearch
                 () => "Open search hotkey",
                 () => "Shows or hides the search window. You can also click the magnifier icon at the top left of the screen.");
             _clearMarkerKey = settings.DefineSetting("ClearMarkerKey", new KeyBinding(),
-                () => "Clear map marker hotkey",
-                () => "Removes the Show on map marker from the world map. Works with the map open.");
+                () => "Clear map markers hotkey",
+                () => "Removes all Show on map markers from the world map. Works with the map open.");
             _openMapOnShow = settings.DefineSetting("OpenMapOnShow", true,
                 () => "Open map on Show on map",
                 () => "After Show on map, open the world map if it isn't already open, by pressing the game's map key below. Chat must be closed.");
@@ -523,7 +529,7 @@ namespace TyriaSearch
 
         internal void ShowOnMap(SearchItem item)
         {
-            _mapMarker.Target = item;
+            if (!IsMarked(item)) _mapMarker.Targets.Add(item);
             _window.ShowMessage($"{item.Entry.Name} is marked on the world map. Open the map (M) to see it.");
             if (_openMapOnShow.Value && !GameService.Gw2Mumble.UI.IsMapOpen) _ = OpenMapAsync();
         }
@@ -569,10 +575,16 @@ namespace TyriaSearch
 
         internal void ClearMapMarker()
         {
-            if (_mapMarker.Target == null) return;
-            _mapMarker.Target = null;
-            _window.ShowMessage("Map marker cleared.");
-            if (GameService.Gw2Mumble.UI.IsMapOpen) ScreenNotification.ShowNotification("Tyria Search: map marker cleared.");
+            if (_mapMarker.Targets.Count == 0) return;
+            _mapMarker.Targets.Clear();
+            _window.ShowMessage("Map markers cleared.");
+            if (GameService.Gw2Mumble.UI.IsMapOpen) ScreenNotification.ShowNotification("Tyria Search: map markers cleared.");
+        }
+
+        internal void RemoveMapMarker(SearchItem item)
+        {
+            _mapMarker.Targets.Remove(MarkerFor(item));
+            _window.ShowMessage($"{item.Entry.Name} removed from the world map.");
         }
 
         internal void ToggleFavourite(SearchItem item)
