@@ -56,3 +56,41 @@ Each module is written to `<Module>/bin/Release/<Module>.bhm`. Copy it into Blis
 ## Credits
 
 The hint icon (`WikiSearch/ref/textures/WikiSearch.png`) is from [KenediaDev's TyrianQoL](https://github.com/KenediaDev/Kenedia.BlishHUD).
+
+## Tyria Search
+
+Search waypoints, points of interest, vistas, NPCs, items, skills and traits by name, map or chat code, then copy, paste or whisper their chat links, or mark them on the map.
+Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; written from scratch.
+
+Open it with the magnifier icon at the top left or the hotkey, and type. Results update as you type, and a map name lists that map's landmarks.
+
+- **Click** a result to copy its chat link (changeable in settings). For an NPC, that's the waypoint nearest to them.
+- **Enter** copies the top result, closes the window and returns to the game, ready to paste.
+- **Right-click** a result for the menu (changeable in settings): copy, paste into chat or whisper to yourself; Show on map; Copy /wiki command; Open wiki page; Add to / Remove from favourites; Clear map marker. **Shift-click** always opens the menu.
+- **Show on map** marks the result on the world map (M). If it's off screen, the marker sits at the screen edge pointing the way. Clear it with the Clear map marker hotkey or from the menu.
+- With the search box empty, the window shows your favourites. Item names are coloured by rarity. Results without a game icon (most NPCs, many wiki pages) get a plain one for their kind.
+- If nothing matches, it asks the wiki live and lists the pages it finds (places, NPCs, objects, items), placed on the map and linked to their nearest waypoint where possible. Item pages get the item's chat link. A last result opens the full wiki search in your browser.
+
+NPCs come from the wiki. About half have exact coordinates there; the rest only name their area ("Trader's Forum"), so the marker goes to that area's centre and says *approximate*. Either way, the chat link is the nearest waypoint. NPCs listed only by map, or a region like "Kryta" without coordinates, get no marker or waypoint; clicking them opens their wiki page. An NPC in several places is listed once per place, so searching "bank" lists every banker. NPC names are in English.
+
+Data is downloaded from the GW2 API and the wiki the first time, then in full once a month. After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
+
+- Places, skills and traits: about 1.5 MB per language, under a minute.
+- NPCs: about 2 MB, a few minutes (the wiki is slower than the API).
+- Items: about 10 MB per language, a few minutes.
+
+Results are searchable as each part arrives. **Update data** in the settings downloads everything again; use it if a renamed item or new point on an existing map is missing.
+
+### Settings
+
+- **Open search hotkey** – unset by default.
+- **Second search language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
+- **Open map on Show on map** (on) – opens the world map after Show on map, if it isn't open already.
+- **Game's map key** (M) – the World Map key from the game's Control Options, pressed by Open map on Show on map.
+- **Clear map marker hotkey** (unbound) – removes the map marker, also while the map is open.
+- **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
+- **Search items** (on).
+- **Restore clipboard** (on) – put back what you had copied after Paste into chat or Whisper to yourself.
+- **Key press delay** (40 ms, 20–250) – raise it if pasted or whispered text is sometimes typed wrong.
+- **Left-click a result** (Copy chat link) and **Right-click a result** (Show menu) – also Paste into chat, Whisper to yourself, Show on map, Open wiki page, Copy wiki command or Toggle favourite. If the result has no chat link or map position, its wiki page opens instead.
+- **Update data** button – downloads all search data again now (NPCs and items only when they're on).

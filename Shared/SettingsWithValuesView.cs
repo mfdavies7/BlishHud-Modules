@@ -14,6 +14,7 @@ namespace ModuleShared
     /// The usual module settings panel, except whole-number sliders also get a box showing their value.
     /// The box can be typed into; the value is applied on Enter or when the box loses focus.
     /// Blish HUD's own slider view can't be extended, so every setting is laid out here.
+    /// Optional buttons go below the settings.
     /// </summary>
     internal class SettingsWithValuesView : View
     {
@@ -23,11 +24,13 @@ namespace ModuleShared
         private const int ValueBoxWidth = 60;
 
         private readonly SettingCollection _settings;
+        private readonly (string text, string tooltip, Action click)[] _buttons;
         private readonly List<Action> _unsubscribe = new List<Action>();
 
-        public SettingsWithValuesView(SettingCollection settings)
+        public SettingsWithValuesView(SettingCollection settings, params (string text, string tooltip, Action click)[] buttons)
         {
             _settings = settings;
+            _buttons = buttons;
         }
 
         protected override void Build(Container buildPanel)
@@ -62,6 +65,12 @@ namespace ModuleShared
                     HeightSizingMode = SizingMode.AutoSize,
                 };
                 container.Show(view);
+            }
+
+            foreach (var (text, tooltip, click) in _buttons)
+            {
+                var button = new StandardButton { Parent = flow, Text = text, BasicTooltipText = tooltip, Width = 160 };
+                button.Click += (_, __) => click();
             }
         }
 
