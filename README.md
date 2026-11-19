@@ -26,7 +26,7 @@ The hint can't tell whether the cursor is over an item; Blish HUD and GW2 don't 
 
 ## Waypoint Paste
 
-Press a hotkey to whisper a waypoint chat link to your own character. The link shows up in chat, ready to click or share. Afterwards chat is switched back to `/s`, so your next message isn't whispered to yourself.
+Press a hotkey to whisper a waypoint chat link to your own character. The link shows up in chat, ready to click or share. Chat stays on the whisper channel afterwards, so a message you type next is also whispered to yourself.
 Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from scratch.
 
 ### Settings
