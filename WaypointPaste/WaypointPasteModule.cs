@@ -130,7 +130,7 @@ namespace WaypointPaste
         private async Task PasteWaypointAsync()
         {
             _busy = true;
-            // Restore even an empty clipboard, so the "/s " typed last isn't left behind.
+            // Restore even an empty clipboard, so the message typed last isn't left behind.
             bool restoreClipboard = false;
             string previousClipboard = null;
             try
@@ -143,7 +143,7 @@ namespace WaypointPaste
                 string waypoint = _useClipboardFirst.Value && IsPointOfInterest(clipboard) ? clipboard.Trim() : _waypoint.Value.Trim();
                 if (!IsPointOfInterest(waypoint)) throw new AbortException("The saved waypoint isn't a valid chat code. Check Waypoint Chat Code in the settings.");
 
-                await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value);
+                await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value, switchBackToSay: false);
 
                 if (_autoClickLink.Value) await ClickChatLinkAsync(delay);
             }

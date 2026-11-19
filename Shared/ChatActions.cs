@@ -14,6 +14,8 @@ namespace ModuleShared
     /// </summary>
     internal static class ChatActions
     {
+        private static readonly Logger Log = Logger.GetLogger(typeof(ChatActions));
+
         private static readonly Keys[] Modifiers =
             { Keys.LeftShift, Keys.RightShift, Keys.LeftControl, Keys.RightControl, Keys.LeftAlt, Keys.RightAlt };
 
@@ -59,10 +61,10 @@ namespace ModuleShared
         }
 
         /// <summary>
-        /// Whispers the message to the player's own character so it shows in chat, then switches chat back to /s.
+        /// Whispers the message to the player's own character so it shows in chat, then (if <paramref name="switchBackToSay"/>) switches chat back to /s.
         /// Chat that is already open is closed first; text typed into it stays and is handled as unsent text.
         /// </summary>
-        public static async Task WhisperToSelfAsync(string message, int delay, bool overwriteUnsentText)
+        public static async Task WhisperToSelfAsync(string message, int delay, bool overwriteUnsentText, bool switchBackToSay = true)
         {
             string name = GameService.Gw2Mumble.PlayerCharacter.Name;
             if (string.IsNullOrEmpty(name)) throw new AbortException("Couldn't read your character name. Try again in a moment.");
@@ -104,26 +106,34 @@ namespace ModuleShared
                 }
             }
 
-            // "/s " first switches out of any whisper channel left over from earlier, so "/w " starts fresh.
-            // Say is used because every player has it, unlike a guild channel.
-            // Tab moves from the whisper name to the message box.
-            foreach (string text in new[] { "/s ", "/w ", name, null, message })
+            // GW2 sometimes drops a paste (e.g. on a frame hitch). An empty message box makes Enter close chat without
+            // sending anything, so the whisper would silently not happen; check the box before sending and retype once.
+            for (int attempt = 1; ; attempt++)
             {
-                if (text == null)
+                await TypeWhisperAsync(name, message, delay);
+
+                string typed = await CopyChatTextAsync(delay); // leaves the text selected
+                if (IsJustTheMessage(typed, name)) break;
+
+                Log.Warn($"Whisper attempt {attempt}: the message box was {(typed == null ? "empty" : "not just the message")} before sending.");
+                if (attempt == 2)
                 {
-                    Stroke(VirtualKeyShort.TAB, chatOpen: true);
-                    await Task.Delay(delay);
-                    continue;
+                    if (IsSafe(chatOpen: true)) Keyboard.Stroke(VirtualKeyShort.END, true);
+                    throw new AbortException("The whisper wasn't typed correctly, so it wasn't sent. Try again, or raise Key Press Delay in the settings.");
                 }
 
-                await SetClipboardAsync(text);
-                await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                if (typed != null)
+                {
+                    Stroke(VirtualKeyShort.BACK, chatOpen: true); // the text is selected, so this deletes all of it
+                    await Task.Delay(delay);
+                }
             }
 
             Stroke(VirtualKeyShort.RETURN, chatOpen: true);
             if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
                 throw new AbortException("The whisper may not have been sent; chat is still open.");
             await Task.Delay(delay);
+            if (!switchBackToSay) return;
 
             // Otherwise the next message the player types would also be whispered to themselves.
             // Enter on the now-empty box closes chat without sending anything (Escape could open the game menu).
@@ -138,6 +148,34 @@ namespace ModuleShared
                 throw new AbortException("Whisper sent, but chat didn't close after switching back to /s.");
         }
 
+        /// <summary>
+        /// "/s " first switches out of any whisper channel left over from earlier, so "/w " starts fresh.
+        /// Say is used because every player has it, unlike a guild channel.
+        /// Tab moves from the whisper name to the message box.
+        /// </summary>
+        private static async Task TypeWhisperAsync(string name, string message, int delay)
+        {
+            foreach (string text in new[] { "/s ", "/w ", name, null, message })
+            {
+                if (text == null)
+                {
+                    Stroke(VirtualKeyShort.TAB, chatOpen: true);
+                    await Task.Delay(delay);
+                    continue;
+                }
+
+                await SetClipboardAsync(text);
+                await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+            }
+        }
+
+        /// <summary>
+        /// The message box should hold only the message. GW2 shows a pasted chat code as a link, so the copied text
+        /// isn't compared with the message; instead, leftovers of the commands or the name mean a step was missed.
+        /// </summary>
+        private static bool IsJustTheMessage(string typed, string name) =>
+            typed != null && !typed.Contains("/w") && !typed.Contains("/s") && !typed.Contains(name);
+
         /// <summary>A held hotkey modifier would turn Enter or V into other shortcuts.</summary>
         private static async Task ReleaseModifiersAsync()
         {
@@ -150,14 +188,17 @@ namespace ModuleShared
         /// Selects everything in the open chat box and copies it (copy, not cut, so nothing is lost).
         /// The text stays selected afterwards.
         /// </summary>
-        private static async Task<bool> ChatHasTextAsync(int delay)
+        private static async Task<bool> ChatHasTextAsync(int delay) => await CopyChatTextAsync(delay) != null;
+
+        /// <summary>The open chat box's text, or null if it's empty. The text stays selected afterwards.</summary>
+        private static async Task<string> CopyChatTextAsync(int delay)
         {
             await SetClipboardAsync(DraftCheckMarker);
             await CtrlStrokeAsync(VirtualKeyShort.KEY_A, delay);
             await CtrlStrokeAsync(VirtualKeyShort.KEY_C, delay);
             await Task.Delay(delay);
             string copied = await ClipboardUtil.WindowsClipboardService.GetTextAsync();
-            return !string.IsNullOrEmpty(copied) && copied != DraftCheckMarker;
+            return string.IsNullOrEmpty(copied) || copied == DraftCheckMarker ? null : copied;
         }
     }
 }
