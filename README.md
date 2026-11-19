@@ -18,7 +18,7 @@ Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scra
 - **Work when the map is open** (on) – when off, shift-clicking map points links them as usual.
 - **Return to the game after searching** (off) – switch back to GW2 once the browser opens.
 - **Restore clipboard** (on) – put back what you had copied; the module pastes `/wiki ` through the clipboard.
-- **Key press delay** (40 ms, 1–250) – raise it if the command is sometimes typed wrong.
+- **Key press delay** (60 ms, 20–250) – raise it if the command is sometimes typed wrong.
 - **Wait for Shift release before sending** (off) – only type `/wiki` after you let go of Shift. Turn on if the command goes missing or the link gets replaced.
 - **Show hint while holding Shift** (on) – shown only when a click would search: enabled, in game, game focused, and chat or map closed unless the settings above allow them.
 
@@ -39,8 +39,8 @@ Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from s
 - **Auto Click Chat Link** (off) – after the whisper is sent, click its link in chat for you. The cursor goes back to where it was.
 - **Set click position hotkey** – send a whisper, hover over its link in chat, press this to save the spot. Set it again if you move or resize chat.
 - **Click position X / Y** – screen position of the link, filled in by the hotkey; type to fine-tune. 0, 0 means not set.
-- **Wait before clicking link** (500 ms, 0–3000) – raise it if the click sometimes happens before the whisper shows up in chat.
-- **Key press delay** (40 ms, 1–250) – raise it if the whisper is sometimes typed wrong.
+- **Wait before clicking link** (500 ms, 20–3000) – raise it if the click sometimes happens before the whisper shows up in chat.
+- **Key press delay** (60 ms, 20–250) – raise it if the whisper is sometimes typed wrong.
 
 ## Build
 
@@ -94,6 +94,6 @@ Results are searchable as each part arrives. **Update data** in the settings dow
 - **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
 - **Search items** (on).
 - **Restore clipboard** (on) – put back what you had copied after Paste into chat or Whisper to yourself.
-- **Key press delay** (40 ms, 20–250) – raise it if pasted or whispered text is sometimes typed wrong.
+- **Key press delay** (60 ms, 20–250) – raise it if pasted or whispered text is sometimes typed wrong.
 - **Left-click a result** (Copy chat link) and **Right-click a result** (Show menu) – also Paste into chat, Whisper to yourself, Show on map, Open wiki page, Copy wiki command or Toggle favourite. If the result has no chat link or map position, its wiki page opens instead.
 - **Update data** button – downloads all search data again now (NPCs and items only when they're on).
