@@ -32,6 +32,7 @@ namespace TyriaSearch
         private readonly List<Gw2Data.Place> _mapRects;
         private readonly Dictionary<int, Gw2Data.Place> _mapsById;
         private readonly Dictionary<int, string> _displayMapNames;
+        private readonly Dictionary<int, string> _englishMapNames;
 
         /// <param name="english">English landmark data, to match the wiki's names.</param>
         /// <param name="display">Landmark data in the display language, for map names. May be the English data.</param>
@@ -55,10 +56,16 @@ namespace TyriaSearch
             _mapRects = places.Where(p => p.IsMap && p.Rect?.Length == 4)
                 .OrderBy(p => p.Continent).ThenByDescending(p => Waypoints(p.MapId)).ToList();
             _mapsById = _mapRects.GroupBy(p => p.MapId).ToDictionary(g => g.Key, g => g.First());
+            _englishMapNames = places.Where(p => p.IsMap).GroupBy(p => p.MapId).ToDictionary(g => g.Key, g => g.First().Name);
             _displayMapNames = (display?.Places ?? places).Where(p => p.IsMap).GroupBy(p => p.MapId).ToDictionary(g => g.Key, g => g.First().Name);
         }
 
         public string MapName(int mapId) => _displayMapNames.TryGetValue(mapId, out var name) ? name : null;
+
+        public string EnglishMapName(int mapId) => _englishMapNames.TryGetValue(mapId, out var name) ? name : null;
+
+        /// <summary>Tyria (1) or the Mists (2); null for maps without a known area on a continent.</summary>
+        public int? ContinentOf(int mapId) => _mapsById.TryGetValue(mapId, out var map) ? map.Continent : (int?)null;
 
         /// <summary>A wiki place name as an area (with its centre), a whole map (no position) or a landmark; null if unknown.</summary>
         public Placement? Find(string name)

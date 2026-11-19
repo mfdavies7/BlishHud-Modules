@@ -18,9 +18,14 @@ namespace TyriaSearch
         [JsonProperty("y")] public float Y { get; set; }
         [JsonProperty("kind"), JsonConverter(typeof(StringEnumConverter))] public PortalKind Kind { get; set; }
         [JsonProperty("name")] public string Destination { get; set; }
+        /// <summary>The map the portal is on, by name; only to make the files readable.</summary>
+        [JsonProperty("from")] public string Origin { get; set; }
+        /// <summary>Only for portals just noticed, not saved: the map the portal leads to.</summary>
+        [JsonIgnore] public int DestinationMapId { get; set; }
 
         /// <summary>
-        /// The portals in ref/portals.json, made by tools/make_portals.py from Tekkit's All-In-One marker pack.
+        /// The portals in ref/portals.json, made by tools/make_portals.py from Tekkit's All-In-One marker pack, or the ones
+        /// <see cref="PortalLearner"/> saved, in the same format.
         /// </summary>
         public static List<Portal> Load(Stream json)
         {
@@ -48,6 +53,19 @@ namespace TyriaSearch
         };
 
         public const string NameSeparator = " to ";
+
+        /// <summary>Each kind as the review panel and settings name it.</summary>
+        public static readonly (PortalKind kind, string label)[] KindLabels =
+        {
+            (PortalKind.Zone, "Zone portal"),
+            (PortalKind.AsuraGate, "Asura gate"),
+            (PortalKind.Dungeon, "Dungeon entrance"),
+            (PortalKind.Raid, "Raid entrance"),
+            (PortalKind.Fractal, "Fractal entrance"),
+        };
+
+        public static string KindLabel(PortalKind kind) => KindLabels.First(k => k.kind == kind).label;
+        public static PortalKind KindFromLabel(string label) => KindLabels.FirstOrDefault(k => k.label == label).kind;
 
         /// <summary>Search entries for the portals, placed in their area with the nearest waypoint as chat link. English names.</summary>
         public static IEnumerable<SearchEntry> Entries(IEnumerable<Portal> portals, Places places) => portals.Select(p =>

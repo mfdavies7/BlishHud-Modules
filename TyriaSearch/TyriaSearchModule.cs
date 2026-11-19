@@ -38,31 +38,45 @@ namespace TyriaSearch
         private SettingEntry<KeyBinding> _clearMarkerKey;
         private SettingEntry<bool> _openMapOnShow;
         private SettingEntry<bool> _showPortals;
+        private SettingEntry<bool> _learnPortals;
         private SettingEntry<KeyBinding> _gameMapKey;
         private SettingEntry<SearchLanguage> _secondLanguage;
         private SettingEntry<bool> _searchItems;
         private SettingEntry<bool> _searchNpcs;
+        private SettingEntry<bool> _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits;
+        private SettingEntry<bool> _searchWiki;
+        private SettingEntry<bool> _swapIconClicks;
         private SettingEntry<bool> _restoreClipboard;
         private SettingEntry<bool> _overwriteUnsentText;
         private SettingEntry<int> _keyDelayMs;
         private SettingEntry<ResultAction> _leftClick;
         private SettingEntry<ResultAction> _rightClick;
         private SettingEntry<List<string>> _favourites;
+        private SettingEntry<int> _portalPanelX, _portalPanelY; // NoPosition until dragged
+        private const int NoPosition = int.MinValue;
 
         private Texture2D _icon;
         // Shown for results without an icon of their own, by name (npc, item, skill, location, page).
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
         private CornerIcon _cornerIcon;
+        private StandardWindow _settingsWindow;
         private SearchWindow _window;
         private MapMarker _mapMarker;
         private Gw2Data _data;
-        private List<Portal> _portals; // bundled; set in Initialize, before any refresh reads it
+        private List<Portal> _bundledPortals;
+        private PortalLearner _portalLearner;
+        private PortalReview _portalReview;
+        private string _returnPromptMap; // where to go back to for the return portal of the last new one
+        private PortalKind _returnKind; // the kind chosen for that portal, the return's likely kind too
+        // Bundled and learned; set in Initialize, before any refresh reads it, and replaced when a portal is learned.
+        private volatile List<Portal> _portals;
 
         // Written by the background refresh, read by the UI each frame.
         private volatile SearchIndex _index = SearchIndex.Empty;
         private volatile string[] _indexLanguages = { "en" };
         private volatile Dictionary<int, int> _continents = new Dictionary<int, int>();
         private volatile Places _places; // null until English map data is loaded
+        private volatile DataSet _publishedData; // what the index was last built from, to rebuild it after a setting change
         private volatile Dictionary<string, string> _fileIcons; // /v2/files icons, saved with the NPCs; null without them
 
         // Live wiki searches by query, so retyping a query doesn't ask the wiki again. Main thread only.
@@ -84,6 +98,7 @@ namespace TyriaSearch
         internal string Status => _status;
         // A refresh replaced mid-download can leave the flag set; only the latest refresh running counts.
         internal bool Downloading => _downloading && !_refreshTask.IsCompleted;
+        internal bool SearchWiki => _searchWiki.Value;
         internal ResultAction LeftClick => _leftClick.Value;
         internal ResultAction RightClick => _rightClick.Value;
         internal IReadOnlyList<string> Favourites => _favourites.Value;
@@ -110,6 +125,12 @@ namespace TyriaSearch
             _showPortals = settings.DefineSetting("ShowPortals", false,
                 () => "Show zone portals on the world map",
                 () => "Marks every portal on the world map with the game's icons: zone portals, asura gates, dungeon, raid and fractal entrances. Each is labelled with where it leads once you zoom in.");
+            _swapIconClicks = settings.DefineSetting("SwapIconClicks", false,
+                () => "Swap icon clicks",
+                () => "Left-click the Tyria Search icon at the top left for the settings, and right-click it for the search window.");
+            _learnPortals = settings.DefineSetting("LearnPortals", true,
+                () => "Learn new portals",
+                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget learned portals below removes them.");
             // Never enabled: it's the key to press in the game, not a Blish HUD hotkey.
             _gameMapKey = settings.DefineSetting("GameMapKey", new KeyBinding(Microsoft.Xna.Framework.Input.Keys.M),
                 () => "Game's map key",
@@ -123,6 +144,16 @@ namespace TyriaSearch
             _searchItems = settings.DefineSetting("SearchItems", true,
                 () => "Search items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
+            // Already downloaded with the places, skills and traits; turning one off only leaves it out of the results.
+            _searchWaypoints = settings.DefineSetting("SearchWaypoints", true, () => "Search waypoints", () => "Include waypoints in the results.");
+            _searchPointsOfInterest = settings.DefineSetting("SearchPointsOfInterest", true, () => "Search points of interest", () => "Include points of interest and other landmarks in the results.");
+            _searchVistas = settings.DefineSetting("SearchVistas", true, () => "Search vistas", () => "Include vistas in the results.");
+            _searchPortals = settings.DefineSetting("SearchPortals", true, () => "Search portals", () => "Include zone portals, asura gates and dungeon, raid and fractal entrances, bundled and learned, in the results.");
+            _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search skills", () => "Include skills in the results.");
+            _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search traits", () => "Include traits in the results.");
+            _searchWiki = settings.DefineSetting("SearchWiki", true,
+                () => "Search the wiki when nothing matches",
+                () => "When nothing here matches, ask the wiki and show what it finds. Off: offer to open a wiki search in your browser instead.");
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
                 () => "Restore clipboard",
                 () => "After Paste into chat or Whisper to yourself, put back what you had copied before. Those actions type through the clipboard.");
@@ -145,26 +176,71 @@ namespace TyriaSearch
             _favourites = saved.DefineSetting("Favourites", new List<string>(),
                 () => "Favourites",
                 () => "Keys of favourite results.");
+            _portalPanelX = saved.DefineSetting("PortalPanelX", NoPosition, () => "Portal panel X", () => "Where the new portal panel was dragged to.");
+            _portalPanelY = saved.DefineSetting("PortalPanelY", NoPosition, () => "Portal panel Y", () => "Where the new portal panel was dragged to.");
         }
 
-        public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings,
-            ("Update data", "Download all search data again now: places, skills and traits, plus NPCs and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData));
+        // Blish HUD's settings page only opens the module's own settings window.
+        public override IView GetSettingsView() => new OpenSettingsView(OpenSettingsWindow);
+
+        /// <summary>The settings, in sections, for the settings window.</summary>
+        private IView SettingsView() => new SettingsWithValuesView(
+            new SettingsSection("Search window", new SettingEntry[] { _openKey, _swapIconClicks, _leftClick, _rightClick }),
+            new SettingsSection("Search options", new SettingEntry[]
+                { _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchNpcs, _searchItems, _searchSkills, _searchTraits, _searchWiki }),
+            new SettingsSection("Search data", new SettingEntry[] { _secondLanguage },
+                ("Update data", "Download all search data again now: places, skills and traits, plus NPCs and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
+            new SettingsSection("World map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey }),
+            new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
+                ("Forget learned portals", "Remove every portal Learn new portals added. The bundled portals stay.", ForgetLearnedPortals))
+                { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
+            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _keyDelayMs }));
+
+        internal void OpenSettingsWindow()
+        {
+            if (_settingsWindow == null) return; // not loaded yet
+            if (!_settingsWindow.Visible) _settingsWindow.Show(SettingsView());
+            _settingsWindow.BringWindowToFront();
+        }
+
+        private void ToggleSettingsWindow()
+        {
+            if (_settingsWindow.Visible) _settingsWindow.Hide();
+            else OpenSettingsWindow();
+        }
 
         protected override void Initialize()
         {
             if (_favourites.Value == null) _favourites.Value = new List<string>();
 
-            _data = new Gw2Data(ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch"));
+            string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
+            _data = new Gw2Data(directory);
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
             foreach (string name in new[] { "npc", "item", "skill", "location", "page" })
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
             _mapMarker = new MapMarker(ContinentOf, IconFor) { Parent = GameService.Graphics.SpriteScreen };
             using (var portals = ModuleParameters.ContentsManager.GetFileStream("portals.json"))
-                _portals = Portal.Load(portals);
-            _mapMarker.Portals = _portals;
-            _cornerIcon = new CornerIcon(_icon, "Tyria Search");
+                _bundledPortals = Portal.Load(portals);
+            _portalLearner = new PortalLearner(directory);
+            _portalLearner.Changed += PortalLearner_Changed;
+            _portalReview = new PortalReview(AddLearnedPortal, DiscardLearnedPortal, _portalLearner.CancelReturn,
+                () => _portalPanelX.Value == NoPosition ? (Point?)null : new Point(_portalPanelX.Value, _portalPanelY.Value),
+                point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
+            SetPortals();
+            _cornerIcon = new CornerIcon { Icon = _icon }; // no name, so no tooltip
             _cornerIcon.Click += CornerIcon_Click;
+            _cornerIcon.RightMouseButtonPressed += CornerIcon_RightMouseButtonPressed;
+            // The same window as the search window, so the two look alike.
+            _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
+            {
+                Parent = GameService.Graphics.SpriteScreen,
+                Title = "Tyria Search",
+                Subtitle = "Settings",
+                Emblem = _icon,
+                Id = "mfdavies7.tyriasearch.settings",
+                SavesPosition = true,
+            };
 
             _openKey.Value.Enabled = true;
             _openKey.Value.Activated += OpenKey_Activated;
@@ -173,6 +249,7 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged += SecondLanguage_SettingChanged;
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
+            foreach (var option in SearchOptions) option.SettingChanged += SearchOption_SettingChanged;
             _showPortals.SettingChanged += ShowPortals_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
@@ -187,9 +264,58 @@ namespace TyriaSearch
 
         private void ShowPortals() => _mapMarker.ShowPortals = _showPortals.Value;
 
+        private void SetPortals() => _mapMarker.Portals = _portals = _bundledPortals.Concat(_portalLearner.Learned).ToList();
+
+        private void LearnPortals()
+        {
+            if (_learnPortals.Value)
+            {
+                var known = _portals.Concat(_portalReview.Pending).ToList();
+                var portal = _portalLearner.Update(_places, known, out bool isReturn);
+                if (portal != null)
+                {
+                    if (isReturn) portal.Kind = _returnKind;
+                    else if (!known.Any(p => p.MapId == portal.DestinationMapId && p.Destination == portal.Origin))
+                    {
+                        _portalLearner.ExpectReturn(portal.DestinationMapId, portal.MapId);
+                        _returnPromptMap = portal.Origin;
+                        _returnKind = portal.Kind;
+                    }
+                    _portalReview.Enqueue(portal, isReturn);
+                }
+            }
+            _portalReview.Update(_portalLearner.ExpectingReturn ? _returnPromptMap : null);
+        }
+
+        private void AddLearnedPortal(Portal portal, bool isReturn)
+        {
+            _portalLearner.Add(portal);
+            if (!isReturn) _returnKind = portal.Kind;
+            ScreenNotification.ShowNotification($"Tyria Search added the portal from {portal.Origin} to {portal.Destination}.");
+        }
+
+        // Without the portal there's no return to add.
+        private void DiscardLearnedPortal(Portal portal, bool isReturn)
+        {
+            if (!isReturn && _returnPromptMap == portal.Origin) _portalLearner.CancelReturn();
+        }
+
+        private void ForgetLearnedPortals()
+        {
+            int count = _portalLearner.Learned.Count;
+            if (count == 0)
+            {
+                ScreenNotification.ShowNotification("Tyria Search hasn't learned any portals.");
+                return;
+            }
+            _portalLearner.Forget();
+            ScreenNotification.ShowNotification($"Tyria Search forgot {count} learned portal{(count == 1 ? "" : "s")}.");
+        }
+
         protected override void Update(GameTime gameTime)
         {
             _window.Update();
+            LearnPortals();
             _mapMarker.Size = GameService.Graphics.SpriteScreen.Size;
             _cornerIcon.LoadingMessage = Downloading ? _status : null;
         }
@@ -205,19 +331,49 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged -= SecondLanguage_SettingChanged;
             _searchItems.SettingChanged -= DataSetting_SettingChanged;
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
+            foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
+            if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
             _showPortals.SettingChanged -= ShowPortals_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
-            if (_cornerIcon != null) _cornerIcon.Click -= CornerIcon_Click;
+            if (_cornerIcon != null)
+            {
+                _cornerIcon.Click -= CornerIcon_Click;
+                _cornerIcon.RightMouseButtonPressed -= CornerIcon_RightMouseButtonPressed;
+            }
+            _settingsWindow?.Dispose();
             _cornerIcon?.Dispose();
             _mapMarker?.Dispose();
+            _portalReview?.Dispose();
             _window?.Dispose();
             _icon?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
             _data?.Dispose();
         }
 
-        private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e) => _window.Toggle();
+        private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e)
+        {
+            if (_swapIconClicks.Value) ToggleSettingsWindow();
+            else _window.Toggle();
+        }
+
+        private void CornerIcon_RightMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e)
+        {
+            if (_swapIconClicks.Value) _window.Toggle();
+            else ToggleSettingsWindow();
+        }
+
+        // Search options that only filter the downloaded data; NPCs and items also change what's downloaded.
+        private IEnumerable<SettingEntry<bool>> SearchOptions =>
+            new[] { _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits };
+
+        private void SearchOption_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RebuildIndex();
+
+        private void PortalLearner_Changed(bool listChanged)
+        {
+            SetPortals();
+            RebuildIndex();
+        }
         private void OpenKey_Activated(object sender, EventArgs e) => _window.Toggle();
         private void ClearMarkerKey_Activated(object sender, EventArgs e) => ClearMapMarker();
         private void ShowPortals_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ShowPortals();
@@ -407,8 +563,11 @@ namespace TyriaSearch
             var places = english != null ? new Places(english, main) : null;
             if (data.UseNpcs && data.Npcs != null && places != null)
                 entries = entries.Concat(WikiEntries.BuildNpcs(data.Npcs, places));
-            if (places != null)
+            if (places != null && _searchPortals.Value)
                 entries = entries.Concat(Portal.Entries(_portals, places));
+            var kinds = SearchedKinds();
+            entries = entries.Where(e => kinds.Contains(e.Kind));
+            alternates = alternates.Where(e => kinds.Contains(e.Kind));
 
             var index = new SearchIndex(entries, alternates);
             if (ct.IsCancellationRequested) return;
@@ -418,11 +577,42 @@ namespace TyriaSearch
                 .GroupBy(p => p.MapId).ToDictionary(g => g.Key, g => g.First().Continent);
             _indexLanguages = second != null && data.MainFor(second) != null ? new[] { display, second } : new[] { display };
             _index = index;
+            _publishedData = data;
 
             int days = (int)(DateTime.UtcNow - (main.CheckedUtc ?? main.DownloadedUtc)).TotalDays;
             string age = days <= 0 ? "today" : days == 1 ? "yesterday" : $"{days} days ago";
             _status = $"{index.Count:N0} results available, updated {age}"
                       + (_indexLanguages.Length > 1 ? $". Also matches {LanguageName(second)} names." : ".");
+        }
+
+        /// <summary>The kinds of result the search options leave in. NPCs and items are left out of the data when off.</summary>
+        private HashSet<EntryKind> SearchedKinds()
+        {
+            var kinds = new HashSet<EntryKind> { EntryKind.Npc, EntryKind.Item, EntryKind.WikiPage, EntryKind.Portal };
+            if (_searchWaypoints.Value) kinds.Add(EntryKind.Waypoint);
+            if (_searchPointsOfInterest.Value) kinds.Add(EntryKind.PointOfInterest);
+            if (_searchVistas.Value) kinds.Add(EntryKind.Vista);
+            if (_searchSkills.Value) kinds.Add(EntryKind.Skill);
+            if (_searchTraits.Value) kinds.Add(EntryKind.Trait);
+            return kinds;
+        }
+
+        /// <summary>
+        /// Builds the index again from the data last published, after a search option or the learned portals changed.
+        /// Waits for a refresh still running, which may publish newer data first.
+        /// </summary>
+        private void RebuildIndex()
+        {
+            var cancel = _refreshCancel;
+            if (cancel == null) return; // nothing loaded yet; the first refresh reads the settings
+            var ct = cancel.Token;
+            _refreshTask = _refreshTask.ContinueWith(_ =>
+            {
+                var data = _publishedData;
+                if (data == null) return;
+                try { Publish(data, ct); }
+                catch (Exception ex) { Logger.Warn(ex, "Rebuilding the search index failed."); }
+            }, TaskScheduler.Default);
         }
 
         /// <summary>Missing, or due a full download to pick up renames and fixes that adding new things doesn't.</summary>
