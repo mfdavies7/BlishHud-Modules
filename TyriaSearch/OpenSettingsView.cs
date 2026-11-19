@@ -22,7 +22,7 @@ namespace TyriaSearch
                 WrapText = true,
                 Text = "Tyria Search's settings are in their own window. You can also open it by right-clicking the Tyria Search icon at the top left of the screen.",
             };
-            var button = new StandardButton { Parent = buildPanel, Location = new Point(10, 56), Width = 180, Text = "Open settings window" };
+            var button = new StandardButton { Parent = buildPanel, Location = new Point(10, 56), Width = 180, Text = "Open Settings Window" };
             button.Click += (_, __) => _open();
         }
     }

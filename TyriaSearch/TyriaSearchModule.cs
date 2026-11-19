@@ -38,6 +38,7 @@ namespace TyriaSearch
         private SettingEntry<KeyBinding> _clearMarkerKey;
         private SettingEntry<bool> _openMapOnShow;
         private SettingEntry<bool> _showPortals;
+        private SettingEntry<bool> _showOnMinimap;
         private SettingEntry<bool> _learnPortals;
         private SettingEntry<KeyBinding> _gameMapKey;
         private SettingEntry<SearchLanguage> _secondLanguage;
@@ -114,61 +115,64 @@ namespace TyriaSearch
         protected override void DefineSettings(SettingCollection settings)
         {
             _openKey = settings.DefineSetting("OpenKey", new KeyBinding(),
-                () => "Open search hotkey",
+                () => "Open Search Hotkey",
                 () => "Shows or hides the search window. You can also click the magnifier icon at the top left of the screen.");
             _clearMarkerKey = settings.DefineSetting("ClearMarkerKey", new KeyBinding(),
-                () => "Clear map markers hotkey",
-                () => "Removes all Show on map markers from the world map. Works with the map open.");
+                () => "Clear Map Markers Hotkey",
+                () => "Removes all Show on Map markers from the world map. Works with the map open.");
             _openMapOnShow = settings.DefineSetting("OpenMapOnShow", true,
-                () => "Open map on Show on map",
-                () => "After Show on map, open the world map if it isn't already open, by pressing the game's map key below. Chat must be closed.");
+                () => "Open Map After Show on Map",
+                () => "After Show on Map, open the world map if it isn't already open, by pressing Game's Map Key below. Chat must be closed.");
             _showPortals = settings.DefineSetting("ShowPortals", false,
-                () => "Show zone portals on the world map",
+                () => "Show Portals on the World Map",
                 () => "Marks every portal on the world map with the game's icons: zone portals, asura gates, dungeon, raid and fractal entrances. Each is labelled with where it leads once you zoom in.");
+            _showOnMinimap = settings.DefineSetting("ShowOnMinimap", true,
+                () => "Show on the Minimap",
+                () => "Also draw Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of range sits at the minimap's edge, pointing the way.");
             _swapIconClicks = settings.DefineSetting("SwapIconClicks", false,
-                () => "Swap icon clicks",
+                () => "Swap Icon Clicks",
                 () => "Left-click the Tyria Search icon at the top left for the settings, and right-click it for the search window.");
             _learnPortals = settings.DefineSetting("LearnPortals", true,
-                () => "Learn new portals",
-                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget learned portals below removes them.");
+                () => "Learn New Portals",
+                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them.");
             // Never enabled: it's the key to press in the game, not a Blish HUD hotkey.
             _gameMapKey = settings.DefineSetting("GameMapKey", new KeyBinding(Microsoft.Xna.Framework.Input.Keys.M),
-                () => "Game's map key",
+                () => "Game's Map Key",
                 () => "Set this to the World Map key in the game's options (Control Options, User Interface). M by default.");
             _secondLanguage = settings.DefineSetting("SecondLanguage", SearchLanguage.None,
-                () => "Second search language",
+                () => "Second Search Language",
                 () => "Names are shown in Blish HUD's language (Blish HUD settings, Overlay, Language). Searches also match names in this language, so you can find what guildmates call something. Each language is a separate download.");
             _searchNpcs = settings.DefineSetting("SearchNpcs", true,
                 () => "Search NPCs",
                 () => "Include NPCs from the wiki, with where they are, their nearest waypoint and a map marker. NPC names are in English. About 2 MB from the wiki (a few minutes), downloaded monthly; also downloads English map data if neither search language is English.");
             _searchItems = settings.DefineSetting("SearchItems", true,
-                () => "Search items",
+                () => "Search Items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
             // Already downloaded with the places, skills and traits; turning one off only leaves it out of the results.
-            _searchWaypoints = settings.DefineSetting("SearchWaypoints", true, () => "Search waypoints", () => "Include waypoints in the results.");
-            _searchPointsOfInterest = settings.DefineSetting("SearchPointsOfInterest", true, () => "Search points of interest", () => "Include points of interest and other landmarks in the results.");
-            _searchVistas = settings.DefineSetting("SearchVistas", true, () => "Search vistas", () => "Include vistas in the results.");
-            _searchPortals = settings.DefineSetting("SearchPortals", true, () => "Search portals", () => "Include zone portals, asura gates and dungeon, raid and fractal entrances, bundled and learned, in the results.");
-            _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search skills", () => "Include skills in the results.");
-            _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search traits", () => "Include traits in the results.");
+            _searchWaypoints = settings.DefineSetting("SearchWaypoints", true, () => "Search Waypoints", () => "Include waypoints in the results.");
+            _searchPointsOfInterest = settings.DefineSetting("SearchPointsOfInterest", true, () => "Search Points of Interest", () => "Include points of interest and other landmarks in the results.");
+            _searchVistas = settings.DefineSetting("SearchVistas", true, () => "Search Vistas", () => "Include vistas in the results.");
+            _searchPortals = settings.DefineSetting("SearchPortals", true, () => "Search Portals", () => "Include zone portals, asura gates and dungeon, raid and fractal entrances, bundled and learned, in the results.");
+            _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search Skills", () => "Include skills in the results.");
+            _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search Traits", () => "Include traits in the results.");
             _searchWiki = settings.DefineSetting("SearchWiki", true,
-                () => "Search the wiki when nothing matches",
+                () => "Search the Wiki When Nothing Matches",
                 () => "When nothing here matches, ask the wiki and show what it finds. Off: offer to open a wiki search in your browser instead.");
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
-                () => "Restore clipboard",
-                () => "After Paste into chat or Whisper to yourself, put back what you had copied before. Those actions type through the clipboard.");
+                () => "Restore Clipboard",
+                () => "After Paste into Chat or Whisper to Yourself, put back what you had copied before. Those actions type through the clipboard.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
-                () => "Overwrite unsent chat text",
-                () => "For Whisper to yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
+                () => "Overwrite Unsent Chat Text",
+                () => "For Whisper to Yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
-                () => "Key press delay (ms)",
-                () => "Time between simulated key presses for Paste into chat and Whisper to yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
+                () => "Key Press Delay (ms)",
+                () => "Time between simulated key presses for Paste into Chat and Whisper to Yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
             _keyDelayMs.SetRange(20, 250);
             _leftClick = settings.DefineSetting("LeftClickAction", ResultAction.CopyChatLink,
-                () => "Left-click a result",
+                () => "Left-Click a Result",
                 () => "What clicking a result does. When it can't be done for that result (no chat link, or no map position), the wiki page opens instead. Shift-click always shows the menu.");
             _rightClick = settings.DefineSetting("RightClickAction", ResultAction.ShowMenu,
-                () => "Right-click a result",
+                () => "Right-Click a Result",
                 () => "What right-clicking a result does. When it can't be done for that result (no chat link, or no map position), the wiki page opens instead. Shift-click always shows the menu.");
 
             // Hidden from the settings panel; changed from the results' right-click menu.
@@ -185,14 +189,14 @@ namespace TyriaSearch
 
         /// <summary>The settings, in sections, for the settings window.</summary>
         private IView SettingsView() => new SettingsWithValuesView(
-            new SettingsSection("Search window", new SettingEntry[] { _openKey, _swapIconClicks, _leftClick, _rightClick }),
-            new SettingsSection("Search options", new SettingEntry[]
+            new SettingsSection("Search Window", new SettingEntry[] { _openKey, _swapIconClicks, _leftClick, _rightClick }),
+            new SettingsSection("Search Options", new SettingEntry[]
                 { _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchNpcs, _searchItems, _searchSkills, _searchTraits, _searchWiki }),
-            new SettingsSection("Search data", new SettingEntry[] { _secondLanguage },
-                ("Update data", "Download all search data again now: places, skills and traits, plus NPCs and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
-            new SettingsSection("World map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey }),
+            new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage },
+                ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
+            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
-                ("Forget learned portals", "Remove every portal Learn new portals added. The bundled portals stay.", ForgetLearnedPortals))
+                ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
             new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _keyDelayMs }));
 
@@ -250,7 +254,8 @@ namespace TyriaSearch
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged += SearchOption_SettingChanged;
-            _showPortals.SettingChanged += ShowPortals_SettingChanged;
+            _showPortals.SettingChanged += MapDrawing_SettingChanged;
+            _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
         }
@@ -259,10 +264,14 @@ namespace TyriaSearch
         {
             base.OnModuleLoaded(e);
             RequestRefresh(force: false, restart: false);
-            ShowPortals();
+            ApplyMapDrawing();
         }
 
-        private void ShowPortals() => _mapMarker.ShowPortals = _showPortals.Value;
+        private void ApplyMapDrawing()
+        {
+            _mapMarker.ShowPortals = _showPortals.Value;
+            _mapMarker.ShowOnMinimap = _showOnMinimap.Value;
+        }
 
         private void SetPortals() => _mapMarker.Portals = _portals = _bundledPortals.Concat(_portalLearner.Learned).ToList();
 
@@ -333,7 +342,8 @@ namespace TyriaSearch
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
-            _showPortals.SettingChanged -= ShowPortals_SettingChanged;
+            _showPortals.SettingChanged -= MapDrawing_SettingChanged;
+            _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
             if (_cornerIcon != null)
@@ -376,7 +386,7 @@ namespace TyriaSearch
         }
         private void OpenKey_Activated(object sender, EventArgs e) => _window.Toggle();
         private void ClearMarkerKey_Activated(object sender, EventArgs e) => ClearMapMarker();
-        private void ShowPortals_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ShowPortals();
+        private void MapDrawing_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ApplyMapDrawing();
         private void SecondLanguage_SettingChanged(object sender, ValueChangedEventArgs<SearchLanguage> e) => RequestRefresh(force: false, restart: true);
         private void DataSetting_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RequestRefresh(force: false, restart: true);
         private void Overlay_UserLocaleChanged(object sender, ValueEventArgs<System.Globalization.CultureInfo> e) => RequestRefresh(force: false, restart: true);
@@ -520,8 +530,8 @@ namespace TyriaSearch
                 if (failed.Count > 0)
                 {
                     _status = _index.Count > 0
-                        ? $"Couldn't update {string.Join(", ", failed)}; using what was saved earlier. Try Update data later."
-                        : "Couldn't download the data. Check your connection, then press Update data.";
+                        ? $"Couldn't update {string.Join(", ", failed)}; using what was saved earlier. Try Update Data later."
+                        : "Couldn't download the data. Check your connection, then press Update Data.";
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -754,7 +764,7 @@ namespace TyriaSearch
 
                 var binding = _gameMapKey.Value;
                 if (binding.PrimaryKey == Microsoft.Xna.Framework.Input.Keys.None)
-                    throw new AbortException("set the game's map key in Tyria Search's settings.");
+                    throw new AbortException("Set Game's Map Key in Tyria Search's settings.");
                 // XNA key codes are Windows virtual-key codes.
                 var modifiers = new List<VirtualKeyShort>();
                 if (binding.ModifierKeys.HasFlag(Microsoft.Xna.Framework.Input.ModifierKeys.Ctrl)) modifiers.Add(VirtualKeyShort.LCONTROL);
@@ -786,7 +796,7 @@ namespace TyriaSearch
             if (_mapMarker.Targets.Count == 0) return;
             _mapMarker.Targets.Clear();
             _window.ShowMessage("Map markers cleared.");
-            if (GameService.Gw2Mumble.UI.IsMapOpen) ScreenNotification.ShowNotification("Tyria Search: map markers cleared.");
+            if (GameService.Gw2Mumble.UI.IsMapOpen) ScreenNotification.ShowNotification("Tyria Search: Map markers cleared.");
         }
 
         internal void RemoveMapMarker(SearchItem item)

@@ -46,42 +46,42 @@ namespace WaypointPaste
         protected override void DefineSettings(SettingCollection settings)
         {
             _pasteKey = settings.DefineSetting("PasteKey", new KeyBinding(),
-                () => "Paste waypoint hotkey",
-                () => "Whispers the waypoint to your own character, so the link shows in chat.");
+                () => "Paste Waypoint Hotkey",
+                () => "Whispers the waypoint to your own character, so its link shows up in chat, ready to click or share.");
             _waypoint = settings.DefineSetting("Waypoint", "[&BCAJAAA=]",
-                () => "Waypoint chat code",
+                () => "Waypoint Chat Code",
                 () => "The waypoint to paste, for example [&BCAJAAA=]. Shift-click a waypoint on the map to get its code.");
             _useClipboardFirst = settings.DefineSetting("UseClipboardFirst", false,
-                () => "Use copied waypoint first",
+                () => "Use Copied Waypoint First",
                 () => "If your clipboard holds a waypoint, point of interest or vista chat code, paste that instead of the saved one.");
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
-                () => "Restore clipboard",
+                () => "Restore Clipboard",
                 () => "Put back what you had copied before. The module uses the clipboard to type in chat.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
-                () => "Overwrite unsent chat text",
+                () => "Overwrite Unsent Chat Text",
                 () => "If the chat box still holds text you typed but didn't send, delete it and paste the waypoint. The deleted text can't be recovered. Off: stop and leave your text in chat.");
             _autoClickLink = settings.DefineSetting("AutoClickChatLink", false,
-                () => "Auto Click Chat Link",
-                () => "After the whisper is sent, click its link in chat for you. Set the spot to click with the Set click position hotkey first.");
+                () => "Auto-Click Chat Link",
+                () => "After the whisper is sent, click its link in chat for you. Save the spot to click with Set Click Position Hotkey first.");
             _setClickPositionKey = settings.DefineSetting("SetClickPositionKey", new KeyBinding(),
-                () => "Set click position hotkey",
+                () => "Set Click Position Hotkey",
                 () => "Send a waypoint whisper, hover over its link in chat, then press this to save that spot. Set it again if you move or resize chat.");
             // 0, 0 means not set: the top-left corner of the main screen is never where a chat link lands.
             int left = GetSystemMetrics(SmXVirtualScreen), top = GetSystemMetrics(SmYVirtualScreen);
             _clickX = settings.DefineSetting("ClickX", 0,
-                () => "Click position X",
-                () => "Screen X position of the chat link, in pixels. Set by the Set click position hotkey, or type it in. 0, 0 means not set.");
+                () => "Click Position X",
+                () => "Screen X position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.");
             _clickX.SetRange(left, left + GetSystemMetrics(SmCxVirtualScreen) - 1);
             _clickY = settings.DefineSetting("ClickY", 0,
-                () => "Click position Y",
-                () => "Screen Y position of the chat link, in pixels. Set by the Set click position hotkey, or type it in. 0, 0 means not set.");
+                () => "Click Position Y",
+                () => "Screen Y position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.");
             _clickY.SetRange(top, top + GetSystemMetrics(SmCyVirtualScreen) - 1);
             _clickWaitMs = settings.DefineSetting("ClickWaitMs", 500,
-                () => "Wait before clicking link (ms)",
+                () => "Wait Before Clicking Link (ms)",
                 () => "Time for the whisper to show up in chat before the link is clicked. Raise it if the click sometimes misses the link.");
             _clickWaitMs.SetRange(20, 3000);
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
-                () => "Key press delay (ms)",
+                () => "Key Press Delay (ms)",
                 () => "Time between simulated key presses. Raise it if the whisper is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
             _keyDelayMs.SetRange(20, 250);
         }
@@ -109,7 +109,7 @@ namespace WaypointPaste
             var cursor = Mouse.GetPosition();
             _clickX.Value = cursor.X;
             _clickY.Value = cursor.Y;
-            ScreenNotification.ShowNotification("Waypoint Paste: chat link click position saved.");
+            ScreenNotification.ShowNotification("Waypoint Paste: Chat link click position saved.");
         }
 
         private void PasteKey_Activated(object sender, EventArgs e)
@@ -120,7 +120,7 @@ namespace WaypointPaste
             // Chat must start closed: typing into an open message would mix with the whisper.
             if (GameService.Gw2Mumble.UI.IsTextInputFocused)
             {
-                ScreenNotification.ShowNotification("Waypoint Paste: close chat first.", ScreenNotification.NotificationType.Warning);
+                ScreenNotification.ShowNotification("Waypoint Paste: Close chat first.", ScreenNotification.NotificationType.Warning);
                 return;
             }
 
@@ -141,7 +141,7 @@ namespace WaypointPaste
                 previousClipboard = clipboard ?? "";
 
                 string waypoint = _useClipboardFirst.Value && IsPointOfInterest(clipboard) ? clipboard.Trim() : _waypoint.Value.Trim();
-                if (!IsPointOfInterest(waypoint)) throw new AbortException("the saved waypoint chat code isn't valid.");
+                if (!IsPointOfInterest(waypoint)) throw new AbortException("The saved waypoint isn't a valid chat code. Check Waypoint Chat Code in the settings.");
 
                 await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value);
 
@@ -153,7 +153,7 @@ namespace WaypointPaste
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Waypoint paste failed.");
+                Logger.Warn(ex, "Waypoint Paste failed.");
                 ScreenNotification.ShowNotification("Waypoint Paste failed. See the Blish HUD log for details.", ScreenNotification.NotificationType.Warning);
             }
             finally
@@ -167,7 +167,7 @@ namespace WaypointPaste
         private async Task ClickChatLinkAsync(int delay)
         {
             if (_clickX.Value == 0 && _clickY.Value == 0)
-                throw new AbortException("whisper sent, but no click position is saved. Hover over the link in chat and press the Set click position hotkey.");
+                throw new AbortException("Whisper sent, but no click position is saved. Hover over the link in chat and press Set Click Position Hotkey.");
 
             // Time for the whisper to come back from the server and show up in chat.
             await Task.Delay(_clickWaitMs.Value);

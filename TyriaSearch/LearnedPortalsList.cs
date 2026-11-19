@@ -51,7 +51,7 @@ namespace TyriaSearch
             {
                 Parent = _list,
                 Size = new Point(width, 20),
-                Text = _learner.Learned.Count == 0 ? "No learned portals yet." : $"Learned portals ({_learner.Learned.Count})",
+                Text = _learner.Learned.Count == 0 ? "No learned portals yet." : $"Learned Portals ({_learner.Learned.Count})",
             };
             foreach (var portal in _learner.Learned) AddRow(portal, width);
         }
@@ -104,7 +104,7 @@ namespace TyriaSearch
                 Parent = row,
                 Location = new Point(width - KindWidth - 5, 32),
                 Width = KindWidth,
-                BasicTooltipText = "Picks the map icon.",
+                BasicTooltipText = "Which icon the portal gets on the world map.",
             };
             foreach (var (_, label) in Portal.KindLabels) kind.Items.Add(label);
             kind.SelectedItem = Portal.KindLabel(portal.Kind);

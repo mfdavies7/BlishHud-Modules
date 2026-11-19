@@ -74,7 +74,7 @@ namespace TyriaSearch
             {
                 ("Everything", _ => true),
                 ("Waypoints", i => i.Entry.Kind == EntryKind.Waypoint),
-                ("Points of interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
+                ("Points of Interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
                 ("Vistas", i => i.Entry.Kind == EntryKind.Vista),
                 ("Portals", i => i.Entry.Kind == EntryKind.Portal),
                 ("NPCs", i => i.Entry.Kind == EntryKind.Npc),
@@ -133,7 +133,7 @@ namespace TyriaSearch
                 Parent = _window,
                 Location = new Point(width - clearWidth, 36),
                 Size = new Point(clearWidth, 24),
-                BasicTooltipText = "Remove all Show on map markers from the world map.",
+                BasicTooltipText = "Remove all Show on Map markers from the world map.",
                 Visible = false,
             };
             _clearMarkers.Click += (_, __) => _module.ClearMapMarker();
@@ -187,7 +187,7 @@ namespace TyriaSearch
 
             int markers = _module.MapMarkerCount;
             _clearMarkers.Visible = markers > 0;
-            _clearMarkers.Text = markers == 1 ? "Clear map marker" : $"Clear {markers} markers";
+            _clearMarkers.Text = markers == 1 ? "Clear Map Marker" : $"Clear {markers} Markers";
 
             _status.Text = _message != null && DateTime.UtcNow < _messageUntil ? _message : StatusText();
         }
@@ -317,14 +317,14 @@ namespace TyriaSearch
             string kind = item.Entry.Kind switch
             {
                 EntryKind.Waypoint => "Waypoint",
-                EntryKind.PointOfInterest => "Point of interest",
+                EntryKind.PointOfInterest => "Point of Interest",
                 EntryKind.Vista => "Vista",
                 EntryKind.Skill => "Skill",
                 EntryKind.Trait => "Trait",
                 EntryKind.Item => "Item",
                 EntryKind.Npc => "NPC",
                 EntryKind.Portal => "Portal",
-                _ => "From the wiki",
+                _ => "Wiki Page",
             };
             var parts = new List<string> { kind };
             if (_module.IsFavourite(item)) parts.Insert(0, "Favourite");
@@ -344,7 +344,7 @@ namespace TyriaSearch
             string link = entry.ChatLink == null ? "No chat link or waypoint known."
                 : entry.LinkIsNearestWaypoint ? $"Nearest waypoint {entry.ChatLink}" : entry.ChatLink;
             string clicks = $"Click: {ActionText(_module.LeftClick, item)}. Right-click: {ActionText(_module.RightClick, item)}.";
-            if (_module.LeftClick != ResultAction.ShowMenu && _module.RightClick != ResultAction.ShowMenu) clicks += " Shift-click: more.";
+            if (_module.LeftClick != ResultAction.ShowMenu && _module.RightClick != ResultAction.ShowMenu) clicks += " Shift-click: show the menu.";
             return $"{link}\n{clicks}{position}";
         }
 
@@ -372,7 +372,7 @@ namespace TyriaSearch
                 ResultAction.ShowOnMap => "show on the map",
                 ResultAction.CopyWikiCommand => "copy the /wiki command",
                 ResultAction.ToggleFavourite => _module.IsFavourite(item) ? "remove from favourites" : "add to favourites",
-                ResultAction.ShowMenu => "more",
+                ResultAction.ShowMenu => "show the menu",
                 _ => "open the wiki page",
             };
         }
@@ -418,26 +418,26 @@ namespace TyriaSearch
             var entry = item.Entry;
             if (entry.ChatLink != null)
             {
-                string link = entry.LinkIsNearestWaypoint ? "nearest waypoint" : "chat link";
+                string link = entry.LinkIsNearestWaypoint ? "Nearest Waypoint" : "Chat Link";
                 yield return Add($"Copy {link}", () => _module.Copy(item), "Copy the chat code to the clipboard.");
-                yield return Add($"Paste {link} into chat", () => _module.PasteIntoChat(item), "Open chat and paste the link, ready to send.");
-                yield return Add($"Whisper {link} to yourself", () => _module.WhisperToSelf(item), "Whisper the link to your own character so you can click it in chat.");
+                yield return Add($"Paste {link} into Chat", () => _module.PasteIntoChat(item), "Open chat and paste the link, ready to send.");
+                yield return Add($"Whisper {link} to Yourself", () => _module.WhisperToSelf(item), "Whisper the link to your own character so you can click it in chat.");
             }
             if (_module.IsMarked(item))
-                yield return Add("Remove from map", () => _module.RemoveMapMarker(item), "Remove this result's marker from the world map.");
+                yield return Add("Remove from Map", () => _module.RemoveMapMarker(item), "Remove this result's marker from the world map.");
             else if (entry.X.HasValue)
-                yield return Add("Show on map", () => _module.ShowOnMap(item), "Mark it on the world map, alongside any other markers. Open the map (M) to see it.");
-            yield return Add("Copy /wiki command", () => _module.CopyWikiCommand(item), "Paste it in chat to open the wiki page.");
-            yield return Add("Open wiki page", () => _module.OpenWiki(item), "Open the wiki in your browser.");
+                yield return Add("Show on Map", () => _module.ShowOnMap(item), "Mark it on the world map, alongside any other markers. Open the map (M) to see it.");
+            yield return Add("Copy /wiki Command", () => _module.CopyWikiCommand(item), "Paste it in chat to open the wiki page.");
+            yield return Add("Open Wiki Page", () => _module.OpenWiki(item), "Open the wiki in your browser.");
             // Live wiki results aren't kept, so they can't be favourites.
             if (entry.Kind != EntryKind.WikiPage)
             {
                 yield return _module.IsFavourite(item)
-                    ? Add("Remove from favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.")
-                    : Add("Add to favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.");
+                    ? Add("Remove from Favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.")
+                    : Add("Add to Favourites", () => _module.ToggleFavourite(item), "Favourites show when the search box is empty.");
             }
             if (_module.MapMarkerCount > 0)
-                yield return Add("Clear all map markers", _module.ClearMapMarker, "Remove every marker from the world map.");
+                yield return Add("Clear All Map Markers", _module.ClearMapMarker, "Remove every marker from the world map.");
         }
 
         public void Dispose()

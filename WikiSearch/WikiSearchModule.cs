@@ -47,35 +47,35 @@ namespace WikiSearch
         protected override void DefineSettings(SettingCollection settings)
         {
             _language = settings.DefineSetting("Language", WikiLanguage.GameLanguage,
-                () => "Wiki language",
+                () => "Wiki Language",
                 () => "Which wiki to search. Game Language uses the wiki for your game client's language.");
             _toggleKey = settings.DefineSetting("ToggleKey", new KeyBinding(),
-                () => "Toggle hotkey",
+                () => "Toggle Hotkey",
                 () => "Turns Wiki Search on or off.");
             _enabled = settings.DefineSetting("Enabled", true,
                 () => "Enabled",
                 () => "Shift + left-click an item to open its wiki page. Turn off to link items in chat normally.");
             _workWithChatOpen = settings.DefineSetting("WorkWithChatOpen", false,
-                () => "Work when chat is already open",
+                () => "Work When Chat Is Already Open",
                 () => "Also search when chat was open before the click. Everything typed in chat is searched, so only use this with an empty chat box. Off: shift-click links items into your message as usual.");
             _workWithMapOpen = settings.DefineSetting("WorkWithMapOpen", true,
-                () => "Work when the map is open",
+                () => "Work When the Map Is Open",
                 () => "Also search when shift-clicking on the world map (for example waypoints). Off: shift-click links map points as usual.");
             _returnFocusToGame = settings.DefineSetting("ReturnFocusToGame", false,
-                () => "Return to the game after searching",
+                () => "Return to the Game After Searching",
                 () => "Switch back to Guild Wars 2 after the wiki opens in your browser.");
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
-                () => "Restore clipboard",
+                () => "Restore Clipboard",
                 () => "Put back what you had copied before. The module uses the clipboard to type the /wiki command.");
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
-                () => "Key press delay (ms)",
+                () => "Key Press Delay (ms)",
                 () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
             _keyDelayMs.SetRange(20, 250);
             _waitForShiftRelease = settings.DefineSetting("WaitForShiftRelease", false,
-                () => "Wait for Shift release before sending",
+                () => "Wait for Shift Release Before Sending",
                 () => "Only type the /wiki command after you let go of Shift. Turn on if the command is sometimes missing or the item link gets replaced.");
             _showHint = settings.DefineSetting("ShowHint", true,
-                () => "Show hint while holding Shift",
+                () => "Show Hint While Holding Shift",
                 () => "Show a hint next to the cursor while Shift is held and a click would open the wiki.");
         }
 
@@ -139,7 +139,7 @@ namespace WikiSearch
         private void ToggleKey_Activated(object sender, EventArgs e)
         {
             _enabled.Value = !_enabled.Value;
-            ScreenNotification.ShowNotification($"Wiki Search {(_enabled.Value ? "enabled" : "disabled")}");
+            ScreenNotification.ShowNotification($"Wiki Search {(_enabled.Value ? "enabled" : "disabled")}.");
         }
 
         private void Mouse_LeftMouseButtonPressed(object sender, MouseEventArgs e)
@@ -200,7 +200,7 @@ namespace WikiSearch
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Wiki search failed.");
+                Logger.Warn(ex, "Wiki Search failed.");
                 ScreenNotification.ShowNotification("Wiki Search failed. See the Blish HUD log for details.", ScreenNotification.NotificationType.Warning);
             }
             finally
