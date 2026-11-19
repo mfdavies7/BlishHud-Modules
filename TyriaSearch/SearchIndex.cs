@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 namespace TyriaSearch
 {
     // Values are saved in the cache files; only add new ones at the end.
-    public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage }
+    public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage, Portal }
 
     /// <summary>One searchable thing in one language. Short JSON names keep the cache files small.</summary>
     public sealed class SearchEntry
@@ -19,9 +19,13 @@ namespace TyriaSearch
         [JsonProperty("n")] public string Name { get; set; }
         /// <summary>Map name for landmarks; profession and slot for skills and traits; rarity and type for items; area, map and services for NPCs.</summary>
         [JsonProperty("c")] public string Context { get; set; }
-        /// <summary>A render service URL, or <see cref="BundledIcon"/> and the name of one shipped with the module.</summary>
+        /// <summary>
+        /// A render service URL, <see cref="BundledIcon"/> and the name of one shipped with the module,
+        /// or <see cref="AssetIcon"/> and a game asset id.
+        /// </summary>
         [JsonProperty("i")] public string Icon { get; set; }
         public const string BundledIcon = "bundled:";
+        public const string AssetIcon = "asset:";
         /// <summary>Set when the chat link doesn't identify the entry (NPCs share their waypoint's).</summary>
         [JsonProperty("id")] public string Id { get; set; }
         [JsonProperty("m")] public int MapId { get; set; }
@@ -55,7 +59,10 @@ namespace TyriaSearch
             var languages = alternate == null ? new[] { entry } : new[] { entry, alternate };
             Names = languages.Select(e => SearchIndex.Normalize(e.Name)).ToArray();
             Contexts = languages.Select(e => SearchIndex.Normalize(e.Context)).ToArray();
-            NamesWithContext = languages.Select(e => SearchIndex.Normalize(e.Name + " " + e.Context)).ToArray();
+            NamesWithContext = languages.Select(e => SearchIndex.Normalize(e.Kind == EntryKind.Portal
+                // "portal"/"gate" find every kind of portal; the map it's on (context) before the destination lets "from A to B" match in order
+                ? "portal gate from " + e.Context + " " + e.Name
+                : e.Name + " " + e.Context)).ToArray();
         }
     }
 
@@ -68,11 +75,12 @@ namespace TyriaSearch
             0, // Waypoint
             1, // PointOfInterest
             2, // Vista
-            4, // Skill
-            5, // Trait
-            6, // Item
-            3, // Npc
-            7, // WikiPage (only in live wiki results)
+            5, // Skill
+            6, // Trait
+            7, // Item
+            4, // Npc
+            8, // WikiPage (only in live wiki results)
+            3, // Portal
         };
 
         private readonly List<SearchItem> _items;
@@ -110,7 +118,8 @@ namespace TyriaSearch
         /// Every query word must appear in the name or context (map, profession) of one language.
         /// Exact names first, then names starting with the query; the rest by kind (<see cref="KindOrder"/>), and within
         /// a kind: every word starts a word of the name, context starts with the query (a map name lists that map's
-        /// landmarks), every word is in the name, then other matches that need the context.
+        /// landmarks), every word is in the name, the words in query order across name and context (for portals, origin map then
+        /// destination), then other matches that need the context.
         /// Ties: player skills before unlabelled NPC copies, shorter names first.
         /// </summary>
         public List<SearchItem> Search(string query, Func<SearchItem, bool> filter, int max)
@@ -151,10 +160,23 @@ namespace TyriaSearch
                     : words.All(w => StartsWord(name, w)) ? 2
                     : item.Contexts[i].StartsWith(query, StringComparison.Ordinal) ? 3
                     : words.All(name.Contains) ? 4
-                    : 5;
+                    : InOrder(full, words) ? 5
+                    : 6;
                 if (best < 0 || score < best) best = score;
             }
             return best;
+        }
+
+        private static bool InOrder(string text, string[] words)
+        {
+            int position = 0;
+            foreach (var word in words)
+            {
+                int found = text.IndexOf(word, position, StringComparison.Ordinal);
+                if (found < 0) return false;
+                position = found + word.Length;
+            }
+            return true;
         }
 
         private static bool StartsWord(string text, string word) =>

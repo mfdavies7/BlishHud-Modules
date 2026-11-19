@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
@@ -21,6 +22,17 @@ namespace TyriaSearch
 
         public List<SearchItem> Targets { get; } = new List<SearchItem>();
 
+        /// <summary>Portals to draw on the world map.</summary>
+        public IReadOnlyList<Portal> Portals = Array.Empty<Portal>();
+        public bool ShowPortals;
+
+        private const int PortalSize = 24;
+        private static readonly Color PortalLabelColor = new Color(200, 230, 255);
+        private readonly Dictionary<PortalKind, AsyncTexture2D> _portalIcons = ((PortalKind[])Enum.GetValues(typeof(PortalKind)))
+            .ToDictionary(k => k, k => AsyncTexture2D.FromAssetId(Portal.IconAssetId(k)));
+        // Labels only from about zone zoom; zoomed out, 200 names overlap into a smear. Continent units per UI pixel.
+        private const double PortalLabelMaxScale = 8;
+
         /// <param name="continentOf">Continent of a map id: Tyria (1) or the Mists (2).</param>
         public MapMarker(Func<int, int> continentOf, Func<SearchEntry, AsyncTexture2D> iconFor)
         {
@@ -34,22 +46,52 @@ namespace TyriaSearch
         {
             var ui = GameService.Gw2Mumble.UI;
             if (!ui.IsMapOpen || ui.MapScale <= 0) return;
+            if (ShowPortals) PaintPortals(spriteBatch);
             foreach (var target in Targets) PaintMarker(spriteBatch, target.Entry);
+        }
+
+        private void PaintPortals(SpriteBatch spriteBatch)
+        {
+            var ui = GameService.Gw2Mumble.UI;
+            int continent = _continentOf(GameService.Gw2Mumble.CurrentMap.Id);
+            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier;
+            bool labels = unitsPerUiPixel <= PortalLabelMaxScale;
+            foreach (var portal in Portals)
+            {
+                if (portal.Continent != continent) continue;
+                var position = ToScreen(portal.X, portal.Y);
+                if (position.X < 0 || position.Y < 0 || position.X > Width || position.Y > Height) continue;
+
+                var rect = new Rectangle((int)position.X - PortalSize / 2, (int)position.Y - PortalSize / 2, PortalSize, PortalSize);
+                var icon = _portalIcons[portal.Kind];
+                if (icon.HasTexture) spriteBatch.DrawOnCtrl(this, icon, rect);
+                if (labels)
+                    spriteBatch.DrawStringOnCtrl(this, "To " + portal.Destination, GameService.Content.DefaultFont14,
+                        new Rectangle(rect.X - 100, rect.Bottom, 200 + PortalSize, 18), PortalLabelColor,
+                        false, true, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+            }
+        }
+
+        /// <summary>
+        /// Mumble gives the map's centre in continent units and its scale in continent units per screen pixel;
+        /// Blish HUD draws in its own UI units, which are screen pixels divided by its UI scale.
+        /// </summary>
+        private Vector2 ToScreen(float x, float y)
+        {
+            var ui = GameService.Gw2Mumble.UI;
+            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier;
+            return new Vector2(
+                Width / 2f + (float)((x - ui.MapCenter.X) / unitsPerUiPixel),
+                Height / 2f + (float)((y - ui.MapCenter.Y) / unitsPerUiPixel));
         }
 
         private void PaintMarker(SpriteBatch spriteBatch, SearchEntry entry)
         {
-            var ui = GameService.Gw2Mumble.UI;
             if (entry.X == null || entry.Y == null) return;
             // The map shows the continent the player is on.
             if (_continentOf(entry.MapId) != _continentOf(GameService.Gw2Mumble.CurrentMap.Id)) return;
 
-            // Mumble gives the map's centre in continent units and its scale in continent units per screen pixel;
-            // Blish HUD draws in its own UI units, which are screen pixels divided by its UI scale.
-            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier;
-            var position = new Vector2(
-                Width / 2f + (float)((entry.X.Value - ui.MapCenter.X) / unitsPerUiPixel),
-                Height / 2f + (float)((entry.Y.Value - ui.MapCenter.Y) / unitsPerUiPixel));
+            var position = ToScreen(entry.X.Value, entry.Y.Value);
 
             // Off screen: pin to the nearest edge so the marker still shows which way to go.
             var pinned = new Vector2(

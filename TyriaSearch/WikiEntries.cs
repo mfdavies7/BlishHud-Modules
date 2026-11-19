@@ -233,7 +233,7 @@ namespace TyriaSearch
             return entry;
         }
 
-        private static SearchEntry Entry(EntryKind kind, string id, string name, Placement placement, Places places,
+        internal static SearchEntry Entry(EntryKind kind, string id, string name, Placement placement, Places places,
             string fallbackContext, string services, string icon)
         {
             var context = new List<string>();

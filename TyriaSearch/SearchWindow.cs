@@ -76,6 +76,7 @@ namespace TyriaSearch
                 ("Waypoints", i => i.Entry.Kind == EntryKind.Waypoint),
                 ("Points of interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
                 ("Vistas", i => i.Entry.Kind == EntryKind.Vista),
+                ("Portals", i => i.Entry.Kind == EntryKind.Portal),
                 ("NPCs", i => i.Entry.Kind == EntryKind.Npc),
                 ("Items", i => i.Entry.Kind == EntryKind.Item),
                 ("Skills", i => i.Entry.Kind == EntryKind.Skill),
@@ -322,6 +323,7 @@ namespace TyriaSearch
                 EntryKind.Trait => "Trait",
                 EntryKind.Item => "Item",
                 EntryKind.Npc => "NPC",
+                EntryKind.Portal => "Portal",
                 _ => "From the wiki",
             };
             var parts = new List<string> { kind };
@@ -337,7 +339,8 @@ namespace TyriaSearch
             var entry = item.Entry;
             string position = !entry.X.HasValue ? ""
                 : entry.Approximate ? "\nPosition: centre of the area (the wiki has no exact spot)."
-                : entry.Kind == EntryKind.Npc || entry.Kind == EntryKind.WikiPage ? "\nPosition: exact, from the wiki." : "";
+                : entry.Kind == EntryKind.Npc || entry.Kind == EntryKind.WikiPage ? "\nPosition: exact, from the wiki."
+                : entry.Kind == EntryKind.Portal ? "\nPosition: exact, from Tekkit's marker pack." : "";
             string link = entry.ChatLink == null ? "No chat link or waypoint known."
                 : entry.LinkIsNearestWaypoint ? $"Nearest waypoint {entry.ChatLink}" : entry.ChatLink;
             string clicks = $"Click: {ActionText(_module.LeftClick, item)}. Right-click: {ActionText(_module.RightClick, item)}.";
