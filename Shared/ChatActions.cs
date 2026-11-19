@@ -24,7 +24,7 @@ namespace ModuleShared
         public static async Task FocusGameAsync()
         {
             var gw2 = GameService.GameIntegration.Gw2Instance;
-            if (!gw2.IsInGame) throw new AbortException("Guild Wars 2 isn't in game (loading screen?).");
+            if (!gw2.IsInGame) throw new AbortException("You need to be in game first, not on a loading screen or character select.");
             // Windows can refuse or undo a focus switch, so ask again until GW2 has kept focus for a few frames.
             for (int attempt = 0; attempt < 3; attempt++)
             {
@@ -35,7 +35,7 @@ namespace ModuleShared
                     if (gw2.Gw2HasFocus) return;
                 }
             }
-            throw new AbortException("couldn't switch back to Guild Wars 2. Click the game and try again.");
+            throw new AbortException("Couldn't switch back to Guild Wars 2. Click the game and try again.");
         }
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace ModuleShared
             {
                 Stroke(VirtualKeyShort.RETURN, chatOpen: false);
                 if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                    throw new AbortException("chat didn't open.");
+                    throw new AbortException("Chat didn't open. Try again, or raise Key Press Delay in the settings.");
                 await Task.Delay(delay);
             }
 
@@ -65,7 +65,7 @@ namespace ModuleShared
         public static async Task WhisperToSelfAsync(string message, int delay, bool overwriteUnsentText)
         {
             string name = GameService.Gw2Mumble.PlayerCharacter.Name;
-            if (string.IsNullOrEmpty(name)) throw new AbortException("couldn't read your character name.");
+            if (string.IsNullOrEmpty(name)) throw new AbortException("Couldn't read your character name. Try again in a moment.");
 
             await ReleaseModifiersAsync();
 
@@ -74,13 +74,13 @@ namespace ModuleShared
             {
                 Stroke(VirtualKeyShort.ESCAPE, chatOpen: true);
                 if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                    throw new AbortException("chat is open and couldn't be closed. Close it and try again.");
+                    throw new AbortException("Chat is open and couldn't be closed. Close it and try again.");
                 await Task.Delay(delay);
             }
 
             Stroke(VirtualKeyShort.RETURN, chatOpen: false);
             if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                throw new AbortException("chat didn't open.");
+                throw new AbortException("Chat didn't open. Try again, or raise Key Press Delay in the settings.");
             await Task.Delay(delay);
 
             // GW2 keeps unsent text when chat loses focus; Enter brings it back and the whisper would be added to it.
@@ -89,7 +89,7 @@ namespace ModuleShared
                 if (!overwriteUnsentText)
                 {
                     if (IsSafe(chatOpen: true)) Keyboard.Stroke(VirtualKeyShort.END, true); // deselect, leave the text as it was
-                    throw new AbortException("chat has unsent text. Send or delete it, then try again.");
+                    throw new AbortException("Chat has unsent text. Send or delete it, then try again.");
                 }
 
                 // The text is still selected from the check, so Backspace deletes all of it.
@@ -100,7 +100,7 @@ namespace ModuleShared
                 if (await ChatHasTextAsync(delay))
                 {
                     if (IsSafe(chatOpen: true)) Keyboard.Stroke(VirtualKeyShort.END, true);
-                    throw new AbortException("couldn't clear the chat box. Try again or raise the key press delay.");
+                    throw new AbortException("Couldn't clear the chat box. Try again, or raise Key Press Delay in the settings.");
                 }
             }
 
@@ -122,20 +122,20 @@ namespace ModuleShared
 
             Stroke(VirtualKeyShort.RETURN, chatOpen: true);
             if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                throw new AbortException("whisper may not have been sent; chat is still open.");
+                throw new AbortException("The whisper may not have been sent; chat is still open.");
             await Task.Delay(delay);
 
             // Otherwise the next message the player types would also be whispered to themselves.
             // Enter on the now-empty box closes chat without sending anything (Escape could open the game menu).
             Stroke(VirtualKeyShort.RETURN, chatOpen: false);
             if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                throw new AbortException("whisper sent, but chat didn't reopen to switch back to /s.");
+                throw new AbortException("Whisper sent, but chat didn't reopen to switch back to /s.");
             await Task.Delay(delay);
             await SetClipboardAsync("/s ");
             await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
             Stroke(VirtualKeyShort.RETURN, chatOpen: true);
             if (!await WaitAsync(() => !GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
-                throw new AbortException("whisper sent, but chat didn't close after switching back to /s.");
+                throw new AbortException("Whisper sent, but chat didn't close after switching back to /s.");
         }
 
         /// <summary>A held hotkey modifier would turn Enter or V into other shortcuts.</summary>
@@ -143,7 +143,7 @@ namespace ModuleShared
         {
             foreach (var key in Modifiers) Keyboard.Release((VirtualKeyShort)key, true);
             if (!await WaitAsync(() => !GameService.Input.Keyboard.KeysDown.Any(Modifiers.Contains), 2000))
-                throw new AbortException("let go of Shift, Ctrl and Alt and try again.");
+                throw new AbortException("Let go of Shift, Ctrl and Alt, then try again.");
         }
 
         /// <summary>

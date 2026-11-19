@@ -46,9 +46,9 @@ namespace TyriaSearch
         // Every name is "<label> to <destination>"; the wiki term is the destination (see TyriaSearchModule.WikiTerm).
         private static string Label(PortalKind kind) => kind switch
         {
-            PortalKind.AsuraGate => "Asura gate",
-            PortalKind.Dungeon => "Dungeon entrance",
-            PortalKind.Raid => "Raid entrance",
+            PortalKind.AsuraGate => "Asura Gate",
+            PortalKind.Dungeon => "Dungeon Entrance",
+            PortalKind.Raid => "Raid Entrance",
             _ => "Portal",
         };
 
@@ -57,11 +57,11 @@ namespace TyriaSearch
         /// <summary>Each kind as the review panel and settings name it.</summary>
         public static readonly (PortalKind kind, string label)[] KindLabels =
         {
-            (PortalKind.Zone, "Zone portal"),
-            (PortalKind.AsuraGate, "Asura gate"),
-            (PortalKind.Dungeon, "Dungeon entrance"),
-            (PortalKind.Raid, "Raid entrance"),
-            (PortalKind.Fractal, "Fractal entrance"),
+            (PortalKind.Zone, "Zone Portal"),
+            (PortalKind.AsuraGate, "Asura Gate"),
+            (PortalKind.Dungeon, "Dungeon Entrance"),
+            (PortalKind.Raid, "Raid Entrance"),
+            (PortalKind.Fractal, "Fractal Entrance"),
         };
 
         public static string KindLabel(PortalKind kind) => KindLabels.First(k => k.kind == kind).label;

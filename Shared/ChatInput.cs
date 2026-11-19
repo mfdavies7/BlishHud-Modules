@@ -27,10 +27,10 @@ namespace ModuleShared
         public static void EnsureSafe(bool chatOpen)
         {
             var gw2 = GameService.GameIntegration.Gw2Instance;
-            if (!gw2.Gw2HasFocus) throw new AbortException("stopped because Guild Wars 2 lost focus.");
-            if (!gw2.IsInGame) throw new AbortException("stopped because you left the game (loading screen?).");
+            if (!gw2.Gw2HasFocus) throw new AbortException("Stopped because Guild Wars 2 lost focus.");
+            if (!gw2.IsInGame) throw new AbortException("Stopped because you left the game (loading screen?).");
             if (GameService.Gw2Mumble.UI.IsTextInputFocused != chatOpen)
-                throw new AbortException(chatOpen ? "stopped because chat closed." : "close chat first.");
+                throw new AbortException(chatOpen ? "Stopped because chat closed." : "Close chat first.");
         }
 
         /// <summary>
@@ -69,7 +69,7 @@ namespace ModuleShared
             if (await ClipboardUtil.WindowsClipboardService.SetTextAsync(text)) return;
 
             // Another program may be holding the clipboard open.
-            throw new AbortException("couldn't use the clipboard. Try again.");
+            throw new AbortException("Couldn't use the clipboard. Another program may be using it; try again.");
         }
 
         public static async Task<bool> WaitAsync(Func<bool> condition, int timeoutMs)

@@ -69,14 +69,14 @@ namespace TyriaSearch
             int width = PanelWidth - 20;
 
             _origin = new Label { Parent = _panel, Location = new Point(5, 4), Size = new Point(width, 20) };
-            _destinationLabel = new Label { Parent = _panel, Location = new Point(5, 32), Size = new Point(LabelWidth, 26), Text = "Leads to", VerticalAlignment = VerticalAlignment.Middle };
+            _destinationLabel = new Label { Parent = _panel, Location = new Point(5, 32), Size = new Point(LabelWidth, 26), Text = "Leads To", VerticalAlignment = VerticalAlignment.Middle };
             _destination = new TextBox
             {
                 Parent = _panel, Location = new Point(5 + LabelWidth, 32), Size = new Point(width - LabelWidth, 26),
                 BasicTooltipText = "Where the portal leads, as the wiki names it: the search and map label say \"Portal to\" this, and the wiki opens its page.",
             };
             _kindLabel = new Label { Parent = _panel, Location = new Point(5, 64), Size = new Point(LabelWidth, 26), Text = "Kind", VerticalAlignment = VerticalAlignment.Middle };
-            _kind = new Dropdown { Parent = _panel, Location = new Point(5 + LabelWidth, 64), Width = width - LabelWidth, BasicTooltipText = "Picks the map icon." };
+            _kind = new Dropdown { Parent = _panel, Location = new Point(5 + LabelWidth, 64), Width = width - LabelWidth, BasicTooltipText = "Which icon the portal gets on the world map." };
             foreach (var (_, label) in Portal.KindLabels) _kind.Items.Add(label);
             _hint = new Label
             {
@@ -143,19 +143,19 @@ namespace TyriaSearch
         private void ShowCandidate(Candidate candidate, string returnPrompt)
         {
             var portal = candidate.Portal;
-            _panel.Title = candidate.IsReturn ? "Tyria Search: return portal" : "Tyria Search: new portal";
+            _panel.Title = candidate.IsReturn ? "Tyria Search: Return Portal" : "Tyria Search: New Portal";
             _origin.Text = $"On {portal.Origin}";
             _destination.Text = portal.Destination;
             _kind.SelectedItem = Portal.KindLabel(portal.Kind);
-            _hint.Text = candidate.IsReturn ? "The way back from the portal you just added."
+            _hint.Text = candidate.IsReturn ? "This is the way back through the portal you just added."
                 : returnPrompt != null ? $"After adding, go back through it to {returnPrompt} to add the return portal too."
-                : "Not one Tyria Search knows. Add it to the map and the search?";
+                : "Tyria Search doesn't know this portal yet. Add it to the map and the search?";
             SetEditing(true);
         }
 
         private void ShowReturnPrompt(string map)
         {
-            _panel.Title = "Tyria Search: return portal";
+            _panel.Title = "Tyria Search: Return Portal";
             _origin.Text = $"Go back through the portal to {map}";
             _hint.Text = "Tyria Search will ask about the portal on this side once you're back.";
             SetEditing(false);
