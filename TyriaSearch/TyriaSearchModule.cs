@@ -37,6 +37,7 @@ namespace TyriaSearch
         private SettingEntry<KeyBinding> _openKey;
         private SettingEntry<KeyBinding> _clearMarkerKey;
         private SettingEntry<bool> _openMapOnShow;
+        private SettingEntry<bool> _showPortals;
         private SettingEntry<KeyBinding> _gameMapKey;
         private SettingEntry<SearchLanguage> _secondLanguage;
         private SettingEntry<bool> _searchItems;
@@ -55,6 +56,7 @@ namespace TyriaSearch
         private SearchWindow _window;
         private MapMarker _mapMarker;
         private Gw2Data _data;
+        private List<Portal> _portals; // bundled; set in Initialize, before any refresh reads it
 
         // Written by the background refresh, read by the UI each frame.
         private volatile SearchIndex _index = SearchIndex.Empty;
@@ -105,6 +107,9 @@ namespace TyriaSearch
             _openMapOnShow = settings.DefineSetting("OpenMapOnShow", true,
                 () => "Open map on Show on map",
                 () => "After Show on map, open the world map if it isn't already open, by pressing the game's map key below. Chat must be closed.");
+            _showPortals = settings.DefineSetting("ShowPortals", false,
+                () => "Show zone portals on the world map",
+                () => "Marks every portal on the world map with the game's icons: zone portals, asura gates, dungeon, raid and fractal entrances. Each is labelled with where it leads once you zoom in.");
             // Never enabled: it's the key to press in the game, not a Blish HUD hotkey.
             _gameMapKey = settings.DefineSetting("GameMapKey", new KeyBinding(Microsoft.Xna.Framework.Input.Keys.M),
                 () => "Game's map key",
@@ -155,6 +160,9 @@ namespace TyriaSearch
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
             _mapMarker = new MapMarker(ContinentOf, IconFor) { Parent = GameService.Graphics.SpriteScreen };
+            using (var portals = ModuleParameters.ContentsManager.GetFileStream("portals.json"))
+                _portals = Portal.Load(portals);
+            _mapMarker.Portals = _portals;
             _cornerIcon = new CornerIcon(_icon, "Tyria Search");
             _cornerIcon.Click += CornerIcon_Click;
 
@@ -165,6 +173,7 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged += SecondLanguage_SettingChanged;
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
+            _showPortals.SettingChanged += ShowPortals_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
         }
@@ -173,7 +182,10 @@ namespace TyriaSearch
         {
             base.OnModuleLoaded(e);
             RequestRefresh(force: false, restart: false);
+            ShowPortals();
         }
+
+        private void ShowPortals() => _mapMarker.ShowPortals = _showPortals.Value;
 
         protected override void Update(GameTime gameTime)
         {
@@ -193,6 +205,7 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged -= SecondLanguage_SettingChanged;
             _searchItems.SettingChanged -= DataSetting_SettingChanged;
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
+            _showPortals.SettingChanged -= ShowPortals_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
             if (_cornerIcon != null) _cornerIcon.Click -= CornerIcon_Click;
@@ -207,6 +220,7 @@ namespace TyriaSearch
         private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e) => _window.Toggle();
         private void OpenKey_Activated(object sender, EventArgs e) => _window.Toggle();
         private void ClearMarkerKey_Activated(object sender, EventArgs e) => ClearMapMarker();
+        private void ShowPortals_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ShowPortals();
         private void SecondLanguage_SettingChanged(object sender, ValueChangedEventArgs<SearchLanguage> e) => RequestRefresh(force: false, restart: true);
         private void DataSetting_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RequestRefresh(force: false, restart: true);
         private void Overlay_UserLocaleChanged(object sender, ValueEventArgs<System.Globalization.CultureInfo> e) => RequestRefresh(force: false, restart: true);
@@ -219,6 +233,8 @@ namespace TyriaSearch
         internal AsyncTexture2D IconFor(SearchEntry entry)
         {
             string icon = entry.Icon;
+            if (icon?.StartsWith(SearchEntry.AssetIcon) == true && int.TryParse(icon.Substring(SearchEntry.AssetIcon.Length), out int assetId))
+                return AsyncTexture2D.FromAssetId(assetId);
             bool bundled = icon?.StartsWith(SearchEntry.BundledIcon) == true;
             if (!string.IsNullOrEmpty(icon) && !bundled) return GameService.Content.GetRenderServiceTexture(icon);
             string name = bundled ? icon.Substring(SearchEntry.BundledIcon.Length) : entry.Kind switch
@@ -391,6 +407,8 @@ namespace TyriaSearch
             var places = english != null ? new Places(english, main) : null;
             if (data.UseNpcs && data.Npcs != null && places != null)
                 entries = entries.Concat(WikiEntries.BuildNpcs(data.Npcs, places));
+            if (places != null)
+                entries = entries.Concat(Portal.Entries(_portals, places));
 
             var index = new SearchIndex(entries, alternates);
             if (ct.IsCancellationRequested) return;
@@ -597,10 +615,10 @@ namespace TyriaSearch
 
         internal void OpenWiki(SearchItem item)
         {
-            // NPCs and live results are English wiki pages; open that exact page.
-            if (item.Entry.Kind == EntryKind.Npc || item.Entry.Kind == EntryKind.WikiPage)
+            // NPCs, portals and live results have English names; open that exact page.
+            if (item.Entry.Kind == EntryKind.Npc || item.Entry.Kind == EntryKind.WikiPage || item.Entry.Kind == EntryKind.Portal)
             {
-                OpenWikiSearch(item.Entry.Name, "en");
+                OpenWikiSearch(WikiTerm(item.Entry), "en");
                 return;
             }
 
@@ -668,7 +686,9 @@ namespace TyriaSearch
 
         /// <summary>Unnamed vistas are looked up by their map.</summary>
         private static string WikiTerm(SearchEntry entry) =>
-            entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? entry.Context : entry.Name;
+            entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? entry.Context
+            : entry.Kind == EntryKind.Portal ? entry.Name.Substring(entry.Name.IndexOf(Portal.NameSeparator) + Portal.NameSeparator.Length)
+            : entry.Name;
 
         private sealed class StatusProgress : IProgress<string>
         {

@@ -73,6 +73,8 @@ Open it with the magnifier icon at the top left or the hotkey, and type. Results
 
 NPCs come from the wiki. About half have exact coordinates there; the rest only name their area ("Trader's Forum"), so the marker goes to that area's centre and says *approximate*. Either way, the chat link is the nearest waypoint. NPCs listed only by map, or a region like "Kryta" without coordinates, get no marker or waypoint; clicking them opens their wiki page. An NPC in several places is listed once per place, so searching "bank" lists every banker. NPC names are in English.
 
+Portals are searchable too, under **Portals**: "Portal to Kessex Hills", "Asura gate to Hoelbrak", "Dungeon entrance to Ascalonian Catacombs", "Raid entrance to Spirit Vale". Searching a map's name also finds the portals on that map, "portal" or "gate" finds every kind, and two map names find the portals between them, the one from the first to the second first ("Black Citadel to Lion's Arch", "gate from Hoelbrak"). Positions are exact, the chat link is the nearest waypoint, and the wiki opens the destination's page. Portal names are in English.
+
 Data is downloaded from the GW2 API and the wiki the first time, then in full once a month. After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
 
 - Places, skills and traits: about 1.5 MB per language, under a minute.
@@ -88,6 +90,7 @@ Results are searchable as each part arrives. **Update data** in the settings dow
 - **Open map on Show on map** (on) – opens the world map after Show on map, if it isn't open already.
 - **Game's map key** (M) – the World Map key from the game's Control Options, pressed by Open map on Show on map.
 - **Clear map markers hotkey** (unbound) – removes all map markers, also while the map is open.
+- **Show zone portals on the world map** (off) – marks every portal on the world map with the game's icons: blue zone portals, purple asura gates, and dungeon, raid and fractal entrances, labelled "To <map>" once you zoom in. Covers core Tyria through End of Dragons, from Tekkit's All-In-One marker pack; later maps and the WvW borderlands have none yet.
 - **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
 - **Search items** (on).
 - **Restore clipboard** (on) – put back what you had copied after Paste into chat or Whisper to yourself.
