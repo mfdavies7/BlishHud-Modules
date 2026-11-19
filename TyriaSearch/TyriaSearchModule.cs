@@ -129,7 +129,7 @@ namespace TyriaSearch
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite unsent chat text",
                 () => "For Whisper to yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 40,
+            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
                 () => "Key press delay (ms)",
                 () => "Time between simulated key presses for Paste into chat and Whisper to yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
             _keyDelayMs.SetRange(20, 250);

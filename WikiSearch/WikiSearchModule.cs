@@ -67,7 +67,7 @@ namespace WikiSearch
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
                 () => "Restore clipboard",
                 () => "Put back what you had copied before. The module uses the clipboard to type the /wiki command.");
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 40,
+            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
                 () => "Key press delay (ms)",
                 () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
             _keyDelayMs.SetRange(20, 250);
