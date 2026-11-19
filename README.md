@@ -85,15 +85,23 @@ Results are searchable as each part arrives. **Update data** in the settings dow
 
 ### Settings
 
+The settings are in their own window, in sections (search window, search options, search data, world map, portals, chat). Right-click the Tyria Search icon at the top left to open or close it (or left-click, with Swap icon clicks on), or press **Open settings window** on the module's page in Blish HUD's settings.
+
 - **Open search hotkey** – unset by default.
+- **Swap icon clicks** (off) – left-click the Tyria Search icon for the settings and right-click it for the search window.
 - **Second search language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
 - **Open map on Show on map** (on) – opens the world map after Show on map, if it isn't open already.
 - **Game's map key** (M) – the World Map key from the game's Control Options, pressed by Open map on Show on map.
 - **Clear map markers hotkey** (unbound) – removes all map markers, also while the map is open.
 - **Show zone portals on the world map** (off) – marks every portal on the world map with the game's icons: blue zone portals, purple asura gates, and dungeon, raid and fractal entrances, labelled "To <map>" once you zoom in. Covers core Tyria through End of Dragons, from Tekkit's All-In-One marker pack; later maps and the WvW borderlands have none yet.
+- **Learn new portals** (on) – when you take a portal Tyria Search doesn't know, a panel at the top of the screen (drag it anywhere; it remembers) asks whether to add it, with where it leads (the destination map's name, editable) and its kind (zone portal, asura gate, dungeon, raid or fractal entrance). It then asks you to go back through it; the way back is noticed like any other portal and offered as the return portal (or press **Skip**). Each map change that isn't taken as a new portal is logged in the Blish HUD log with the reason. Added portals are saved to `learned-portals.json` in the `tyriasearch` folder, in the bundled list's format. A portal counts when the map changes within a few seconds of moving, with the world map closed, away from any known portal; waypoints, teleport items and joining a squad member are left out.
+- **Search waypoints**, **Search points of interest**, **Search vistas**, **Search portals**, **Search skills**, **Search traits** (all on) – which kinds of result to include. These are downloaded together, so turning one off only leaves it out of the results.
 - **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
 - **Search items** (on).
+- **Search the wiki when nothing matches** (on) – off: offer to open a wiki search in your browser instead.
 - **Restore clipboard** (on) – put back what you had copied after Paste into chat or Whisper to yourself.
 - **Key press delay** (60 ms, 20–250) – raise it if pasted or whispered text is sometimes typed wrong.
 - **Left-click a result** (Copy chat link) and **Right-click a result** (Show menu) – also Paste into chat, Whisper to yourself, Show on map, Open wiki page, Copy wiki command or Toggle favourite. If the result has no chat link or map position, its wiki page opens instead.
 - **Update data** button – downloads all search data again now (NPCs and items only when they're on).
+- **Learned portals** list (in the Portals section) – every learned portal, with where it leads and its kind to edit (saved on Enter, or when you pick a kind) and a **Delete** button.
+- **Forget learned portals** button – removes every portal Learn new portals added.

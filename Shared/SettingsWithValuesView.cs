@@ -10,11 +10,28 @@ using Microsoft.Xna.Framework;
 
 namespace ModuleShared
 {
+    /// <summary>A titled, collapsible group of settings, with optional buttons below them.</summary>
+    internal sealed class SettingsSection
+    {
+        public string Title { get; }
+        public IReadOnlyList<SettingEntry> Entries { get; }
+        public (string text, string tooltip, Action click)[] Buttons { get; }
+        /// <summary>Optional: adds controls of the module's own after the settings, before the buttons.</summary>
+        public Action<FlowPanel> BuildExtra { get; set; }
+
+        public SettingsSection(string title, IEnumerable<SettingEntry> entries, params (string text, string tooltip, Action click)[] buttons)
+        {
+            Title = title;
+            Entries = entries.ToList();
+            Buttons = buttons;
+        }
+    }
+
     /// <summary>
     /// The usual module settings panel, except whole-number sliders also get a box showing their value.
     /// The box can be typed into; the value is applied on Enter or when the box loses focus.
     /// Blish HUD's own slider view can't be extended, so every setting is laid out here.
-    /// Optional buttons go below the settings.
+    /// Optional buttons go below the settings. Settings can instead be laid out in titled sections.
     /// </summary>
     internal class SettingsWithValuesView : View
     {
@@ -25,12 +42,19 @@ namespace ModuleShared
 
         private readonly SettingCollection _settings;
         private readonly (string text, string tooltip, Action click)[] _buttons;
+        private readonly SettingsSection[] _sections;
         private readonly List<Action> _unsubscribe = new List<Action>();
 
+        /// <summary>Every setting in the collection, in order, then the buttons.</summary>
         public SettingsWithValuesView(SettingCollection settings, params (string text, string tooltip, Action click)[] buttons)
         {
             _settings = settings;
             _buttons = buttons;
+        }
+
+        public SettingsWithValuesView(params SettingsSection[] sections)
+        {
+            _sections = sections;
         }
 
         protected override void Build(Container buildPanel)
@@ -45,7 +69,35 @@ namespace ModuleShared
                 CanScroll = true,
             };
 
-            foreach (var entry in _settings.Entries.Where(e => e.SessionDefined))
+            if (_sections == null)
+            {
+                BuildEntries(flow, _settings.Entries, _buttons);
+                return;
+            }
+
+            foreach (var section in _sections)
+            {
+                var group = new FlowPanel
+                {
+                    Parent = flow,
+                    Title = section.Title,
+                    Width = flow.ContentRegion.Width - 10,
+                    HeightSizingMode = SizingMode.AutoSize,
+                    FlowDirection = ControlFlowDirection.SingleTopToBottom,
+                    ControlPadding = new Vector2(0, 5),
+                    OuterControlPadding = new Vector2(5, 5),
+                    ShowBorder = true,
+                    CanCollapse = true,
+                };
+                BuildEntries(group, section.Entries, null);
+                section.BuildExtra?.Invoke(group);
+                BuildButtons(group, section.Buttons);
+            }
+        }
+
+        private void BuildEntries(FlowPanel flow, IEnumerable<SettingEntry> entries, (string text, string tooltip, Action click)[] buttons)
+        {
+            foreach (var entry in entries.Where(e => e.SessionDefined))
             {
                 if (entry is SettingEntry<int> intEntry)
                 {
@@ -67,7 +119,13 @@ namespace ModuleShared
                 container.Show(view);
             }
 
-            foreach (var (text, tooltip, click) in _buttons)
+            BuildButtons(flow, buttons);
+        }
+
+        private static void BuildButtons(FlowPanel flow, (string text, string tooltip, Action click)[] buttons)
+        {
+            if (buttons == null) return;
+            foreach (var (text, tooltip, click) in buttons)
             {
                 var button = new StandardButton { Parent = flow, Text = text, BasicTooltipText = tooltip, Width = 160 };
                 button.Click += (_, __) => click();

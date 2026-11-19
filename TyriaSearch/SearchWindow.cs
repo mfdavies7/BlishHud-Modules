@@ -281,7 +281,7 @@ namespace TyriaSearch
             }
             else if (_shownResults.Count == 0 && query.Length > 0)
             {
-                askingWiki = query.Length >= MinLiveQueryLength && _category.SelectedItem != "Favourites";
+                askingWiki = _module.SearchWiki && query.Length >= MinLiveQueryLength && _category.SelectedItem != "Favourites";
                 if (askingWiki)
                 {
                     _ = new ResultRow(null) { Parent = _results, Width = rowWidth, Title = $"Searching the wiki for \"{query}\"…", Subtitle = "Nothing here matched." };
@@ -340,7 +340,7 @@ namespace TyriaSearch
             string position = !entry.X.HasValue ? ""
                 : entry.Approximate ? "\nPosition: centre of the area (the wiki has no exact spot)."
                 : entry.Kind == EntryKind.Npc || entry.Kind == EntryKind.WikiPage ? "\nPosition: exact, from the wiki."
-                : entry.Kind == EntryKind.Portal ? "\nPosition: exact, from Tekkit's marker pack." : "";
+                : entry.Kind == EntryKind.Portal ? "\nPosition: exact, from Tekkit's marker pack or where you took it." : "";
             string link = entry.ChatLink == null ? "No chat link or waypoint known."
                 : entry.LinkIsNearestWaypoint ? $"Nearest waypoint {entry.ChatLink}" : entry.ChatLink;
             string clicks = $"Click: {ActionText(_module.LeftClick, item)}. Right-click: {ActionText(_module.RightClick, item)}.";
