@@ -11,7 +11,7 @@ namespace TyriaSearch
     /// </summary>
     public static class WikiEntries
     {
-        private const int MaxLocationsPerNpc = 10;
+        private const int MaxLocationsPerEntry = 10;
 
         // Wiki service names to /v2/files icon ids.
         private static readonly Dictionary<string, string> ServiceIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -118,7 +118,7 @@ namespace TyriaSearch
                     npcEntries.Add(Entry(EntryKind.Npc, $"npc:{npc.Title}@{key}", npc.Title, placement, places, fallbackContext, serviceText, icon));
                 }
 
-                foreach (string location in (npc.Locations ?? new List<string>()).Take(MaxLocationsPerNpc))
+                foreach (string location in (npc.Locations ?? new List<string>()).Take(MaxLocationsPerEntry))
                 {
                     var found = places.Find(location);
                     if (!found.HasValue)
@@ -153,6 +153,55 @@ namespace TyriaSearch
                     foreach (string location in unplaced) Add(location ?? "", new Placement(), location);
                 }
                 entries.AddRange(npcEntries);
+            }
+            return entries;
+        }
+
+        /// <summary>
+        /// One entry per spot an event has coordinates for, else per area it starts in (that area's centre), else
+        /// the last place its location path names. Context: where, then level and type ("Group event").
+        /// </summary>
+        public static List<SearchEntry> BuildEvents(Gw2Data.EventCacheFile events, Places places)
+        {
+            var entries = new List<SearchEntry>();
+            foreach (var ev in events.Events)
+            {
+                var details = new List<string>();
+                if (ev.Level > 0) details.Add($"Level {ev.Level}");
+                if (!string.IsNullOrEmpty(ev.Type) && ev.Type != "Dynamic event") details.Add(ev.Type);
+                string detailText = string.Join(" · ", details);
+
+                var placed = new HashSet<(int, int, int)>();
+                var eventEntries = new List<SearchEntry>();
+                void Add(string key, Placement placement, string fallbackContext)
+                {
+                    if (placement.X.HasValue && !placed.Add((placement.MapId, (int)placement.X.Value / 10, (int)placement.Y.Value / 10))) return;
+                    eventEntries.Add(Entry(EntryKind.Event, $"event:{ev.Title}@{key}", ev.Title, placement, places, fallbackContext, detailText, Gw2Data.EventIcon));
+                }
+
+                foreach (var point in (ev.Coordinates ?? new List<float[]>()).Take(MaxLocationsPerEntry))
+                {
+                    var at = places.At(point[0], point[1]);
+                    if (at.HasValue) Add($"{at.Value.MapId}:{(int)point[0]},{(int)point[1]}", at.Value, null);
+                }
+
+                if (eventEntries.Count == 0)
+                {
+                    foreach (string area in (ev.StartsIn ?? new List<string>()).Take(MaxLocationsPerEntry))
+                    {
+                        var found = places.Find(area);
+                        if (found.HasValue) Add(area, found.Value, null);
+                    }
+                }
+
+                if (eventEntries.Count == 0)
+                {
+                    // "Tyria; Kryta; Queensdale": the narrowest place the path names, placed if it's a known area or map.
+                    string narrowest = (ev.LocationTree ?? "").Split(';').Select(s => s.Trim()).LastOrDefault(s => s.Length > 0 && s != "Various");
+                    var found = places.Find(narrowest);
+                    Add(narrowest ?? "", found ?? new Placement(), found.HasValue ? null : narrowest ?? ev.StartsIn?.FirstOrDefault());
+                }
+                entries.AddRange(eventEntries);
             }
             return entries;
         }
