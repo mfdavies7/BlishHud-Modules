@@ -17,28 +17,52 @@ namespace TyriaSearch
 {
     /// <summary>
     /// Downloads searchable data from the GW2 API and the wiki, and keeps it in cache files:
-    /// landmarks, skills and traits per language; items per language; NPCs (the wiki is English only).
+    /// landmarks, map activities, skills and traits per language; items per language; NPCs and events (the wiki is English only).
     /// </summary>
     public sealed class Gw2Data : IDisposable
     {
         private const string Api = "https://api.guildwars2.com/v2/";
         private const string WikiApi = "https://wiki.guildwars2.com/api.php";
         private const int CacheVersion = 3;
+        // The places file has its own version, so adding to it doesn't download items and NPCs again too.
+        // 4: renown hearts, hero challenges, mastery points and adventures.
+        private const int MainCacheVersion = 4;
         private const int WikiAskLimit = 5000; // the ask API stops paging around offset 5,500
         private const int MaxAttempts = 5;
         private const int ItemPageSize = 200; // the API's maximum
 
         /// <summary>Name given to vistas, which the API almost never names.</summary>
         public const string UnnamedVistaName = "Vista";
+        // The API doesn't name these at all; the map name (context) tells them apart.
+        private const string HeroChallengeName = "Hero Challenge";
+        private const string MasteryPointName = "Mastery Point";
 
-        // From /v2/files (map_waypoint, map_poi, map_vista).
+        // From /v2/files (map_waypoint, map_poi, map_vista, map_heart_empty, map_heropoint, map_adventure).
         public const string WaypointIcon = "https://render.guildwars2.com/file/32633AF8ADEA696A1EF56D3AE32D617B10D3AC57/157353.png";
         private const string PoiIcon = "https://render.guildwars2.com/file/25B230711176AB5728E86F5FC5F0BFAE48B32F6E/97461.png";
         private const string VistaIcon = "https://render.guildwars2.com/file/A2C16AF497BA3A0903A0499FFBAF531477566F10/358415.png";
+        private const string HeartIcon = "https://render.guildwars2.com/file/09ACBA53B7412CC3C76E7FEF39929843C20CB0E4/102440.png";
+        private const string HeroChallengeIcon = "https://render.guildwars2.com/file/B4EC6BB3FDBC42557C3CAE0CAA9E57EBF9E462E3/156626.png";
+        private const string AdventureIcon = "https://render.guildwars2.com/file/94ED0C4A49295657095EF5D09CC8C4E6709E6FCA/961368.png";
+        // The wiki's "Event cog (map icon)"; /v2/files has no event icon.
+        public const string EventIcon = "https://render.guildwars2.com/file/9F7E0DB4681D22F7927B11B87593386FD77BFABE/102390.png";
+
+        // Mastery point icons by the API's mastery region, as game asset ids (from the wiki's "Mastery point (…)" files).
+        private static readonly Dictionary<string, int> MasteryIcons = new Dictionary<string, int>
+        {
+            ["Tyria"] = 962101,
+            ["Maguuma"] = 962063,
+            ["Desert"] = 1770234,
+            ["Tundra"] = 2221470,
+            ["Jade"] = 2604760,
+            ["Sky"] = 3124914,
+            ["Wild"] = 3379046,
+            ["Magic"] = 3713114,
+        };
 
         // The wiki's ask API stops paging at offset 5,500, so NPCs are fetched in groups by the first letter of their page.
         // Other first characters (punctuation, accented capitals) are looked up in the page list at download time.
-        private static readonly string[] NpcTitleStarts =
+        private static readonly string[] TitleStarts =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".Select(c => c.ToString()).ToArray();
 
         // Title ranges of the page list outside A-Z and 0-9: before "0", between "9" and "A", and after "Z".
@@ -138,13 +162,35 @@ namespace TyriaSearch
             public Dictionary<string, string> Icons { get; set; }
         }
 
+        public sealed class WikiEvent
+        {
+            [JsonProperty("n")] public string Title { get; set; }
+            /// <summary>The areas the event starts in, by wiki page name ("Shaemoor Fields").</summary>
+            [JsonProperty("s")] public List<string> StartsIn { get; set; }
+            /// <summary>Where it is, widest first: "Tyria; Kryta; Queensdale; Shaemoor Fields", or "Various".</summary>
+            [JsonProperty("t")] public string LocationTree { get; set; }
+            [JsonProperty("v")] public int Level { get; set; }
+            /// <summary>"Dynamic event", "Group event"…</summary>
+            [JsonProperty("e")] public string Type { get; set; }
+            /// <summary>Exact continent positions from the page, when editors added them.</summary>
+            [JsonProperty("p")] public List<float[]> Coordinates { get; set; }
+        }
+
+        public sealed class EventCacheFile
+        {
+            public int Version { get; set; }
+            public DateTime DownloadedUtc { get; set; }
+            public List<WikiEvent> Events { get; set; }
+        }
+
         private string MainPath(string language) => Path.Combine(_cacheDirectory, $"search-data-{language}.json");
         private string ItemsPath(string language) => Path.Combine(_cacheDirectory, $"search-items-{language}.json");
         private string NpcsPath => Path.Combine(_cacheDirectory, "search-npcs.json");
+        private string EventsPath => Path.Combine(_cacheDirectory, "search-events.json");
 
         // Null if there is no saved data, or it's from an older version of the module.
-        public CacheFile LoadMain(string language) => Valid(Load<CacheFile>(MainPath(language)));
-        public CacheFile LoadItems(string language) => Valid(Load<CacheFile>(ItemsPath(language)));
+        public CacheFile LoadMain(string language) => Valid(Load<CacheFile>(MainPath(language)), MainCacheVersion);
+        public CacheFile LoadItems(string language) => Valid(Load<CacheFile>(ItemsPath(language)), CacheVersion);
 
         public NpcCacheFile LoadNpcs()
         {
@@ -152,7 +198,13 @@ namespace TyriaSearch
             return cache?.Version == CacheVersion && cache.Npcs != null ? cache : null;
         }
 
-        private static CacheFile Valid(CacheFile cache) => cache?.Version == CacheVersion && cache.Entries != null ? cache : null;
+        public EventCacheFile LoadEvents()
+        {
+            var cache = Load<EventCacheFile>(EventsPath);
+            return cache?.Version == CacheVersion && cache.Events != null ? cache : null;
+        }
+
+        private static CacheFile Valid(CacheFile cache, int version) => cache?.Version == version && cache.Entries != null ? cache : null;
 
         private static T Load<T>(string path) where T : class
         {
@@ -200,7 +252,7 @@ namespace TyriaSearch
 
             var cache = new CacheFile
             {
-                Version = CacheVersion,
+                Version = MainCacheVersion,
                 Language = language,
                 GameBuild = gameBuild,
                 DownloadedUtc = DateTime.UtcNow,
@@ -286,8 +338,67 @@ namespace TyriaSearch
                         Y = poi.Coord?.Length == 2 ? poi.Coord[1] : (float?)null,
                     });
                 }
+
+                AddActivities(map, mapName, entries, seenLinks);
+            }
+
+            // Hearts, hero challenges, mastery points and adventures have no chat link of their own: give them the nearest waypoint's.
+            var waypoints = entries.Where(e => e.Kind == EntryKind.Waypoint && e.X.HasValue).ToLookup(e => e.MapId);
+            foreach (var entry in entries.Where(e => e.ChatLink == null && e.X.HasValue))
+            {
+                var nearest = waypoints[entry.MapId]
+                    .OrderBy(w => (w.X.Value - entry.X.Value) * (w.X.Value - entry.X.Value) + (w.Y.Value - entry.Y.Value) * (w.Y.Value - entry.Y.Value))
+                    .FirstOrDefault();
+                entry.ChatLink = nearest?.ChatLink;
+                entry.LinkIsNearestWaypoint = nearest != null;
             }
             return entries;
+        }
+
+        /// <summary>
+        /// Renown hearts, hero challenges, mastery points and adventures on one map. Keys other than chat links are the
+        /// same in every language, so a second search language finds its names. <paramref name="seen"/> drops the
+        /// copies on other floors.
+        /// </summary>
+        private static void AddActivities(MapDto map, string mapName, List<SearchEntry> entries, HashSet<string> seen)
+        {
+            void Add(EntryKind kind, string key, string name, string context, string icon, float[] coord)
+            {
+                if (coord?.Length != 2 || string.IsNullOrWhiteSpace(name) || !seen.Add(key)) return;
+                entries.Add(new SearchEntry
+                {
+                    Kind = kind,
+                    Id = key,
+                    Name = name.Trim(),
+                    Context = context,
+                    Icon = icon,
+                    MapId = map.Id,
+                    X = coord[0],
+                    Y = coord[1],
+                });
+            }
+
+            foreach (var task in map.Tasks?.Values ?? Enumerable.Empty<TaskDto>())
+            {
+                // The wiki's page title is the objective without its full stop.
+                string name = task.Objective?.Trim().TrimEnd('.');
+                string context = task.Level > 0 ? $"{mapName} · Level {task.Level}" : mapName;
+                // Not the API's chat link: it's a point of interest link made from the heart's id, usually some other map's waypoint.
+                Add(EntryKind.RenownHeart, $"heart:{task.Id}", name, context, HeartIcon, task.Coord);
+            }
+
+            // Hero challenge ids ("0-7") only count within a map.
+            foreach (var challenge in map.SkillChallenges ?? new List<SkillChallengeDto>())
+                Add(EntryKind.HeroChallenge, $"hero:{map.Id}:{challenge.Id}", HeroChallengeName, mapName, HeroChallengeIcon, challenge.Coord);
+
+            foreach (var point in map.MasteryPoints ?? new List<MasteryPointDto>())
+            {
+                string icon = point.Region != null && MasteryIcons.TryGetValue(point.Region, out int asset) ? SearchEntry.AssetIcon + asset : null;
+                Add(EntryKind.MasteryPoint, $"mastery:{point.Id}", MasteryPointName, mapName, icon, point.Coord);
+            }
+
+            foreach (var adventure in map.Adventures ?? new List<AdventureDto>())
+                Add(EntryKind.Adventure, $"adventure:{adventure.Id}", adventure.Name, mapName, AdventureIcon, adventure.Coord);
         }
 
         private async Task<List<SearchEntry>> DownloadSkillsAndTraitsAsync(string language, CancellationToken ct)
@@ -436,7 +547,7 @@ namespace TyriaSearch
         {
             var iconsTask = GetAsync<List<FileDto>>($"{Api}files?ids=all", _apiSlots, ct);
 
-            var starts = NpcTitleStarts.Concat(await OtherTitleStartsAsync(ct)).ToList();
+            var starts = await AllTitleStartsAsync(ct);
             int done = 0, total = starts.Count + 1;
             void Step() => progress.Report($"NPCs from the wiki, {Interlocked.Increment(ref done)} of {total} parts…");
 
@@ -473,6 +584,53 @@ namespace TyriaSearch
             return cache;
         }
 
+        // ---- Events ----
+
+        /// <summary>
+        /// About 4,500 current events and their coordinates in roughly 30 wiki requests. That's close to the ask API's
+        /// paging limit: if the list is cut short, it's fetched again in groups by first letter, like NPCs.
+        /// </summary>
+        public async Task<EventCacheFile> DownloadEventsAsync(IProgress<string> progress, CancellationToken ct)
+        {
+            const string condition = "[[Has context::Event]][[Is historical::false]]";
+            const string printouts = "|?Starts in|?Located in tree|?Has event level|?Has event type";
+            progress.Report("events from the wiki…");
+
+            var coordinatesTask = DownloadCoordinatesAsync(
+                "[[Has coordinate data object.Has context::Event]][[Has coordinate data object.Is historical::false]]", ct);
+            var (pages, complete) = await AskAllAsync(condition + printouts, ct);
+            if (!complete)
+            {
+                progress.Report("events from the wiki, in parts…");
+                var starts = await AllTitleStartsAsync(ct);
+                var groups = await Task.WhenAll(starts.Select(async start => (await AskAllAsync($"{condition}[[~{start}*]]{printouts}", ct)).results));
+                pages = groups.SelectMany(g => g).ToList();
+            }
+
+            var coordinates = await coordinatesTask;
+            var events = pages.GroupBy(p => p.Name).Select(g => g.First()).Select(page =>
+            {
+                var printout = page.Value["printouts"];
+                var level = (printout?["Has event level"] as JArray)?.FirstOrDefault();
+                coordinates.TryGetValue(page.Name, out var points);
+                return new WikiEvent
+                {
+                    Title = page.Name,
+                    StartsIn = PageNames(printout?["Starts in"]),
+                    LocationTree = (printout?["Located in tree"] as JArray)?.FirstOrDefault()?.Value<string>(),
+                    Level = level?.Type == JTokenType.Integer || level?.Type == JTokenType.Float ? level.Value<int>() : 0,
+                    Type = (printout?["Has event type"] as JArray)?.FirstOrDefault()?.Value<string>(),
+                    Coordinates = points,
+                };
+            }).ToList();
+
+            var cache = new EventCacheFile { Version = CacheVersion, DownloadedUtc = DateTime.UtcNow, Events = events };
+            Save(EventsPath, cache);
+            return cache;
+        }
+
+        private async Task<List<string>> AllTitleStartsAsync(CancellationToken ct) => TitleStarts.Concat(await OtherTitleStartsAsync(ct)).ToList();
+
         /// <summary>First characters of main-namespace pages outside A-Z and 0-9, such as '"', '(' and 'É'. A few requests.</summary>
         private async Task<HashSet<string>> OtherTitleStartsAsync(CancellationToken ct)
         {
@@ -490,9 +648,9 @@ namespace TyriaSearch
                     next = apcontinue == null ? null : $"&apcontinue={Uri.EscapeDataString(apcontinue)}";
                 }
             }
-            starts.ExceptWith(NpcTitleStarts); // the range ends include "0" and "A" themselves
-            // shortcut: '?' and '*' are wildcards in ask patterns and would match every NPC, so those titles are missed;
-            // the wiki has one "?" page and it is no NPC. Find an escape if NPCs ever start with them.
+            starts.ExceptWith(TitleStarts); // the range ends include "0" and "A" themselves
+            // shortcut: '?' and '*' are wildcards in ask patterns and would match every page, so those titles are missed;
+            // the wiki has one "?" page and it is no NPC or event. Find an escape if any ever start with them.
             starts.ExceptWith(new[] { "?", "*" });
             return starts;
         }
@@ -663,6 +821,39 @@ namespace TyriaSearch
             [JsonProperty("continent_rect")] public float[][] ContinentRect { get; set; }
             [JsonProperty("points_of_interest")] public Dictionary<string, PoiDto> PointsOfInterest { get; set; }
             [JsonProperty("sectors")] public Dictionary<string, SectorDto> Sectors { get; set; }
+            [JsonProperty("tasks")] public Dictionary<string, TaskDto> Tasks { get; set; }
+            [JsonProperty("skill_challenges")] public List<SkillChallengeDto> SkillChallenges { get; set; }
+            [JsonProperty("mastery_points")] public List<MasteryPointDto> MasteryPoints { get; set; }
+            [JsonProperty("adventures")] public List<AdventureDto> Adventures { get; set; }
+        }
+
+        /// <summary>A renown heart.</summary>
+        private sealed class TaskDto
+        {
+            [JsonProperty("id")] public int Id { get; set; }
+            [JsonProperty("objective")] public string Objective { get; set; }
+            [JsonProperty("level")] public int Level { get; set; }
+            [JsonProperty("coord")] public float[] Coord { get; set; }
+        }
+
+        private sealed class SkillChallengeDto
+        {
+            [JsonProperty("id")] public string Id { get; set; }
+            [JsonProperty("coord")] public float[] Coord { get; set; }
+        }
+
+        private sealed class MasteryPointDto
+        {
+            [JsonProperty("id")] public int Id { get; set; }
+            [JsonProperty("region")] public string Region { get; set; }
+            [JsonProperty("coord")] public float[] Coord { get; set; }
+        }
+
+        private sealed class AdventureDto
+        {
+            [JsonProperty("id")] public string Id { get; set; }
+            [JsonProperty("name")] public string Name { get; set; }
+            [JsonProperty("coord")] public float[] Coord { get; set; }
         }
 
         private sealed class PoiDto

@@ -19,6 +19,9 @@ namespace TyriaSearch
 
         private const int MaxResults = 100;
         private const int SearchDelayMs = 150; // wait for a pause in typing before searching
+        private const int WikiSearchDelayMs = 700; // longer for the Wiki category, so typing doesn't ask the wiki for every word
+        private const string WikiCategory = "Wiki";
+        private const string FavouritesCategory = "Favourites";
         private const int MessageSeconds = 4;
 
         // The game's rarity colours, Legendary lightened to read on the dark window.
@@ -38,8 +41,9 @@ namespace TyriaSearch
             public int Version;
             public string Query;
             public List<SearchItem> Items;
-            public bool Live;   // from the live wiki search
-            public bool Failed; // the live wiki search couldn't reach the wiki
+            public bool Live;     // from the live wiki search
+            public bool Failed;   // the live wiki search couldn't reach the wiki
+            public bool WikiOnly; // the Wiki category: ask the wiki without searching here first
         }
 
         private const int MinLiveQueryLength = 3; // shorter queries match too much of the wiki to be useful
@@ -77,11 +81,17 @@ namespace TyriaSearch
                 ("Points of Interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
                 ("Vistas", i => i.Entry.Kind == EntryKind.Vista),
                 ("Portals", i => i.Entry.Kind == EntryKind.Portal),
+                ("Renown Hearts", i => i.Entry.Kind == EntryKind.RenownHeart),
+                ("Hero Challenges", i => i.Entry.Kind == EntryKind.HeroChallenge),
+                ("Mastery Points", i => i.Entry.Kind == EntryKind.MasteryPoint),
+                ("Adventures", i => i.Entry.Kind == EntryKind.Adventure),
                 ("NPCs", i => i.Entry.Kind == EntryKind.Npc),
+                ("Events", i => i.Entry.Kind == EntryKind.Event),
                 ("Items", i => i.Entry.Kind == EntryKind.Item),
                 ("Skills", i => i.Entry.Kind == EntryKind.Skill),
                 ("Traits", i => i.Entry.Kind == EntryKind.Trait),
-                ("Favourites", module.IsFavourite),
+                (FavouritesCategory, module.IsFavourite),
+                (WikiCategory, _ => false), // searched live, see RunSearch
             };
 
             // The window background and regions from the Blish HUD window guide.
@@ -103,9 +113,9 @@ namespace TyriaSearch
                 Parent = _window,
                 Location = new Point(0, 0),
                 Size = new Point(width - categoryWidth - 10, 30),
-                PlaceholderText = "Place, NPC, item, skill or trait, or a chat code",
+                PlaceholderText = "Place, NPC, event, item, skill or trait, or a chat code",
             };
-            _query.TextChanged += (_, __) => _searchDue = DateTime.UtcNow.AddMilliseconds(SearchDelayMs);
+            _query.TextChanged += (_, __) => _searchDue = DateTime.UtcNow.AddMilliseconds(WikiSelected ? WikiSearchDelayMs : SearchDelayMs);
             _query.EnterPressed += Query_EnterPressed;
 
             _category = new Dropdown
@@ -162,6 +172,8 @@ namespace TyriaSearch
 
         public void Hide() => _window.Hide();
 
+        private bool WikiSelected => _category.SelectedItem == WikiCategory;
+
         /// <summary>Hands keyboard focus back so simulated keys and the player's typing reach the game.</summary>
         public void ReleaseFocus() => _query.UnsetFocus();
 
@@ -195,6 +207,7 @@ namespace TyriaSearch
         private string StatusText()
         {
             if (_query.Text.Trim().Length > 0 || _module.Index.Count == 0 || _module.Downloading) return _module.Status;
+            if (WikiSelected) return "Type to search the wiki. It's asked once you pause typing.";
             string menu = _module.RightClick == ResultAction.ShowMenu ? "right-click" : _module.LeftClick == ResultAction.ShowMenu ? "click" : "shift-click";
             return _shownResults.Count > 0
                 ? $"Favourites. Type to search; {menu} a result for more."
@@ -229,6 +242,13 @@ namespace TyriaSearch
             var filter = _categories.First(c => c.label == _category.SelectedItem).filter;
             var favourites = _module.Favourites;
             int version = ++_searchVersion;
+
+            // Straight to the wiki; ShowResults asks it.
+            if (WikiSelected)
+            {
+                _pending = new Results { Version = version, Query = query, Items = new List<SearchItem>(), WikiOnly = true };
+                return;
+            }
 
             Task.Run(() =>
             {
@@ -277,19 +297,30 @@ namespace TyriaSearch
             {
                 AddBrowserRow(query, rowWidth, results.Failed
                     ? "Couldn't reach the wiki just now. Opens it in your browser instead."
-                    : _shownResults.Count == 0 ? "Nothing on the wiki either. Opens a full wiki search in your browser." : "More results in your browser.");
+                    : _shownResults.Count > 0 ? "More results in your browser."
+                    : results.WikiOnly ? "Nothing on the wiki. Opens a full wiki search in your browser."
+                    : "Nothing on the wiki either. Opens a full wiki search in your browser.");
             }
             else if (_shownResults.Count == 0 && query.Length > 0)
             {
-                askingWiki = _module.SearchWiki && query.Length >= MinLiveQueryLength && _category.SelectedItem != "Favourites";
+                // The Wiki category asks even with Search the Wiki When Nothing Matches off: the player chose it.
+                askingWiki = (results.WikiOnly || _module.SearchWiki) && query.Length >= MinLiveQueryLength && _category.SelectedItem != FavouritesCategory;
                 if (askingWiki)
                 {
-                    _ = new ResultRow(null) { Parent = _results, Width = rowWidth, Title = $"Searching the wiki for \"{query}\"…", Subtitle = "Nothing here matched." };
-                    AskWiki(results.Version, query);
+                    _ = new ResultRow(null)
+                    {
+                        Parent = _results,
+                        Width = rowWidth,
+                        Title = $"Searching the wiki for \"{query}\"…",
+                        Subtitle = results.WikiOnly ? "Asking the wiki." : "Nothing here matched.",
+                    };
+                    AskWiki(results.Version, query, results.WikiOnly);
                 }
                 else
                 {
-                    AddBrowserRow(query, rowWidth, "No results here. Opens the wiki in your browser.");
+                    AddBrowserRow(query, rowWidth, results.WikiOnly
+                        ? $"Type at least {MinLiveQueryLength} letters to search here. Opens the wiki in your browser."
+                        : "No results here. Opens the wiki in your browser.");
                 }
             }
 
@@ -302,13 +333,16 @@ namespace TyriaSearch
             row.Click += (_, __) => _module.OpenWikiSearch(query);
         }
 
-        private void AskWiki(int version, string query)
+        private void AskWiki(int version, string query, bool wikiOnly)
         {
             _module.SearchWikiLiveAsync(query).ContinueWith(t =>
             {
                 bool ok = t.Status == TaskStatus.RanToCompletion;
                 // Shown only if nothing was typed since (same version).
-                _pending = new Results { Version = version, Query = query, Items = ok ? t.Result : new List<SearchItem>(), Live = true, Failed = !ok };
+                _pending = new Results
+                {
+                    Version = version, Query = query, Items = ok ? t.Result : new List<SearchItem>(), Live = true, Failed = !ok, WikiOnly = wikiOnly,
+                };
             });
         }
 
@@ -324,6 +358,11 @@ namespace TyriaSearch
                 EntryKind.Item => "Item",
                 EntryKind.Npc => "NPC",
                 EntryKind.Portal => "Portal",
+                EntryKind.RenownHeart => "Renown Heart",
+                EntryKind.HeroChallenge => "Hero Challenge",
+                EntryKind.MasteryPoint => "Mastery Point",
+                EntryKind.Adventure => "Adventure",
+                EntryKind.Event => "Event",
                 _ => "Wiki Page",
             };
             var parts = new List<string> { kind };
@@ -339,7 +378,7 @@ namespace TyriaSearch
             var entry = item.Entry;
             string position = !entry.X.HasValue ? ""
                 : entry.Approximate ? "\nPosition: centre of the area (the wiki has no exact spot)."
-                : entry.Kind == EntryKind.Npc || entry.Kind == EntryKind.WikiPage ? "\nPosition: exact, from the wiki."
+                : entry.Kind == EntryKind.Npc || entry.Kind == EntryKind.Event || entry.Kind == EntryKind.WikiPage ? "\nPosition: exact, from the wiki."
                 : entry.Kind == EntryKind.Portal ? "\nPosition: exact, from Tekkit's marker pack or where you took it." : "";
             string link = entry.ChatLink == null ? "No chat link or waypoint known."
                 : entry.LinkIsNearestWaypoint ? $"Nearest waypoint {entry.ChatLink}" : entry.ChatLink;

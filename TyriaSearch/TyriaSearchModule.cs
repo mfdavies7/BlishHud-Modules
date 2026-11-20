@@ -44,7 +44,9 @@ namespace TyriaSearch
         private SettingEntry<SearchLanguage> _secondLanguage;
         private SettingEntry<bool> _searchItems;
         private SettingEntry<bool> _searchNpcs;
+        private SettingEntry<bool> _searchEvents;
         private SettingEntry<bool> _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits;
+        private SettingEntry<bool> _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures;
         private SettingEntry<bool> _searchWiki;
         private SettingEntry<bool> _swapIconClicks;
         private SettingEntry<bool> _restoreClipboard;
@@ -145,6 +147,9 @@ namespace TyriaSearch
             _searchNpcs = settings.DefineSetting("SearchNpcs", true,
                 () => "Search NPCs",
                 () => "Include NPCs from the wiki, with where they are, their nearest waypoint and a map marker. NPC names are in English. About 2 MB from the wiki (a few minutes), downloaded monthly; also downloads English map data if neither search language is English.");
+            _searchEvents = settings.DefineSetting("SearchEvents", true,
+                () => "Search Events",
+                () => "Include current events from the wiki, with where they start, their nearest waypoint and a map marker. Event names are in English. About 1 MB from the wiki (under a minute), downloaded monthly; also downloads English map data if neither search language is English.");
             _searchItems = settings.DefineSetting("SearchItems", true,
                 () => "Search Items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
@@ -152,6 +157,10 @@ namespace TyriaSearch
             _searchWaypoints = settings.DefineSetting("SearchWaypoints", true, () => "Search Waypoints", () => "Include waypoints in the results.");
             _searchPointsOfInterest = settings.DefineSetting("SearchPointsOfInterest", true, () => "Search Points of Interest", () => "Include points of interest and other landmarks in the results.");
             _searchVistas = settings.DefineSetting("SearchVistas", true, () => "Search Vistas", () => "Include vistas in the results.");
+            _searchHearts = settings.DefineSetting("SearchRenownHearts", true, () => "Search Renown Hearts", () => "Include renown hearts, by their task, in the results.");
+            _searchHeroChallenges = settings.DefineSetting("SearchHeroChallenges", true, () => "Search Hero Challenges", () => "Include hero challenges in the results. They have no names; search for the map or \"hero challenge\".");
+            _searchMasteryPoints = settings.DefineSetting("SearchMasteryPoints", true, () => "Search Mastery Points", () => "Include mastery points in the results. They have no names; search for the map or \"mastery point\".");
+            _searchAdventures = settings.DefineSetting("SearchAdventures", true, () => "Search Adventures", () => "Include adventures in the results.");
             _searchPortals = settings.DefineSetting("SearchPortals", true, () => "Search Portals", () => "Include zone portals, asura gates and dungeon, raid and fractal entrances, bundled and learned, in the results.");
             _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search Skills", () => "Include skills in the results.");
             _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search Traits", () => "Include traits in the results.");
@@ -191,9 +200,12 @@ namespace TyriaSearch
         private IView SettingsView() => new SettingsWithValuesView(
             new SettingsSection("Search Window", new SettingEntry[] { _openKey, _swapIconClicks, _leftClick, _rightClick }),
             new SettingsSection("Search Options", new SettingEntry[]
-                { _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchNpcs, _searchItems, _searchSkills, _searchTraits, _searchWiki }),
+                {
+                    _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
+                    _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchItems, _searchSkills, _searchTraits, _searchWiki,
+                }),
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage },
-                ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
+                ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
             new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
@@ -253,6 +265,7 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged += SecondLanguage_SettingChanged;
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
+            _searchEvents.SettingChanged += DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged += SearchOption_SettingChanged;
             _showPortals.SettingChanged += MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
@@ -340,6 +353,7 @@ namespace TyriaSearch
             _secondLanguage.SettingChanged -= SecondLanguage_SettingChanged;
             _searchItems.SettingChanged -= DataSetting_SettingChanged;
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
+            _searchEvents.SettingChanged -= DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
             _showPortals.SettingChanged -= MapDrawing_SettingChanged;
@@ -373,9 +387,12 @@ namespace TyriaSearch
             else ToggleSettingsWindow();
         }
 
-        // Search options that only filter the downloaded data; NPCs and items also change what's downloaded.
-        private IEnumerable<SettingEntry<bool>> SearchOptions =>
-            new[] { _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits };
+        // Search options that only filter the downloaded data; NPCs, events and items also change what's downloaded.
+        private IEnumerable<SettingEntry<bool>> SearchOptions => new[]
+        {
+            _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits,
+            _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures,
+        };
 
         private void SearchOption_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RebuildIndex();
 
@@ -424,7 +441,8 @@ namespace TyriaSearch
             public readonly Dictionary<string, Gw2Data.CacheFile> Main = new Dictionary<string, Gw2Data.CacheFile>();
             public readonly Dictionary<string, Gw2Data.CacheFile> Items = new Dictionary<string, Gw2Data.CacheFile>();
             public Gw2Data.NpcCacheFile Npcs;
-            public bool UseItems, UseNpcs;
+            public Gw2Data.EventCacheFile Events;
+            public bool UseItems, UseNpcs, UseEvents;
 
             public Gw2Data.CacheFile MainFor(string language) => language != null && Main.TryGetValue(language, out var c) ? c : null;
             public Gw2Data.CacheFile ItemsFor(string language) => language != null && Items.TryGetValue(language, out var c) ? c : null;
@@ -447,9 +465,12 @@ namespace TyriaSearch
 
         private async Task RefreshAsync(bool force, CancellationToken ct)
         {
-            var data = new DataSet { Languages = SearchLanguages(), UseItems = _searchItems.Value, UseNpcs = _searchNpcs.Value };
-            // NPC locations are matched by English place names, since the wiki is English.
-            var mainLanguages = data.UseNpcs ? data.Languages.Union(new[] { "en" }).ToArray() : data.Languages;
+            var data = new DataSet
+            {
+                Languages = SearchLanguages(), UseItems = _searchItems.Value, UseNpcs = _searchNpcs.Value, UseEvents = _searchEvents.Value,
+            };
+            // NPC and event locations are matched by English place names, since the wiki is English.
+            var mainLanguages = data.UseNpcs || data.UseEvents ? data.Languages.Union(new[] { "en" }).ToArray() : data.Languages;
             var failed = new List<string>();
 
             T TryLoad<T>(Func<T> load, string what) where T : class
@@ -481,6 +502,7 @@ namespace TyriaSearch
                 foreach (string language in mainLanguages) data.Main[language] = TryLoad(() => _data.LoadMain(language), $"{language} data");
                 if (data.UseItems) foreach (string language in data.Languages) data.Items[language] = TryLoad(() => _data.LoadItems(language), $"{language} items");
                 if (data.UseNpcs) data.Npcs = TryLoad(_data.LoadNpcs, "NPCs");
+                if (data.UseEvents) data.Events = TryLoad(_data.LoadEvents, "events");
                 Publish(data, ct);
 
                 int build = GameService.Gw2Mumble.Info.BuildId;
@@ -488,7 +510,7 @@ namespace TyriaSearch
                 Task<string> fingerprint = null;
                 Task<string> Fingerprint() => fingerprint ??= _data.MainFingerprintAsync(ct);
 
-                // Most useful first: places, skills and traits, then NPCs, then the slow item download.
+                // Most useful first: places, skills and traits, then NPCs and events, then the slow item download.
                 // A game update only re-downloads places, skills and traits if maps, skills or traits were added or removed.
                 foreach (string language in mainLanguages)
                 {
@@ -509,6 +531,8 @@ namespace TyriaSearch
                 // The wiki changes a little at a time; game updates don't matter to it.
                 if (data.UseNpcs && (force || IsStale(data.Npcs?.DownloadedUtc)))
                     await Download("NPCs", async progress => data.Npcs = await _data.DownloadNpcsAsync(progress, ct));
+                if (data.UseEvents && (force || IsStale(data.Events?.DownloadedUtc)))
+                    await Download("events", async progress => data.Events = await _data.DownloadEventsAsync(progress, ct));
 
                 // A game update only fetches the items it added.
                 if (data.UseItems)
@@ -573,6 +597,8 @@ namespace TyriaSearch
             var places = english != null ? new Places(english, main) : null;
             if (data.UseNpcs && data.Npcs != null && places != null)
                 entries = entries.Concat(WikiEntries.BuildNpcs(data.Npcs, places));
+            if (data.UseEvents && data.Events != null && places != null)
+                entries = entries.Concat(WikiEntries.BuildEvents(data.Events, places));
             if (places != null && _searchPortals.Value)
                 entries = entries.Concat(Portal.Entries(_portals, places));
             var kinds = SearchedKinds();
@@ -595,13 +621,17 @@ namespace TyriaSearch
                       + (_indexLanguages.Length > 1 ? $". Also matches {LanguageName(second)} names." : ".");
         }
 
-        /// <summary>The kinds of result the search options leave in. NPCs and items are left out of the data when off.</summary>
+        /// <summary>The kinds of result the search options leave in. NPCs, events and items are left out of the data when off.</summary>
         private HashSet<EntryKind> SearchedKinds()
         {
-            var kinds = new HashSet<EntryKind> { EntryKind.Npc, EntryKind.Item, EntryKind.WikiPage, EntryKind.Portal };
+            var kinds = new HashSet<EntryKind> { EntryKind.Npc, EntryKind.Event, EntryKind.Item, EntryKind.WikiPage, EntryKind.Portal };
             if (_searchWaypoints.Value) kinds.Add(EntryKind.Waypoint);
             if (_searchPointsOfInterest.Value) kinds.Add(EntryKind.PointOfInterest);
             if (_searchVistas.Value) kinds.Add(EntryKind.Vista);
+            if (_searchHearts.Value) kinds.Add(EntryKind.RenownHeart);
+            if (_searchHeroChallenges.Value) kinds.Add(EntryKind.HeroChallenge);
+            if (_searchMasteryPoints.Value) kinds.Add(EntryKind.MasteryPoint);
+            if (_searchAdventures.Value) kinds.Add(EntryKind.Adventure);
             if (_searchSkills.Value) kinds.Add(EntryKind.Skill);
             if (_searchTraits.Value) kinds.Add(EntryKind.Trait);
             return kinds;
@@ -815,8 +845,9 @@ namespace TyriaSearch
 
         internal void OpenWiki(SearchItem item)
         {
-            // NPCs, portals and live results have English names; open that exact page.
-            if (item.Entry.Kind == EntryKind.Npc || item.Entry.Kind == EntryKind.WikiPage || item.Entry.Kind == EntryKind.Portal)
+            // NPCs, events, portals and live results have English names; open that exact page.
+            var kind = item.Entry.Kind;
+            if (kind == EntryKind.Npc || kind == EntryKind.Event || kind == EntryKind.WikiPage || kind == EntryKind.Portal)
             {
                 OpenWikiSearch(WikiTerm(item.Entry), "en");
                 return;
@@ -884,9 +915,10 @@ namespace TyriaSearch
             _ => null,
         };
 
-        /// <summary>Unnamed vistas are looked up by their map.</summary>
+        /// <summary>Unnamed vistas, hero challenges and mastery points are looked up by their map (their context).</summary>
         private static string WikiTerm(SearchEntry entry) =>
             entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? entry.Context
+            : entry.Kind == EntryKind.HeroChallenge || entry.Kind == EntryKind.MasteryPoint ? entry.Context
             : entry.Kind == EntryKind.Portal ? entry.Name.Substring(entry.Name.IndexOf(Portal.NameSeparator) + Portal.NameSeparator.Length)
             : entry.Name;
 

@@ -51,7 +51,10 @@ namespace TyriaSearch
             _areas = ByName(places.Where(p => !p.IsMap), p => p.Name, p => p.MapId);
             _areasByMap = places.Where(p => !p.IsMap).ToLookup(p => p.MapId);
             _maps = ByName(places.Where(p => p.IsMap), p => p.Name, p => p.MapId);
-            _landmarks = ByName(english.Entries.Where(e => e.X.HasValue && e.Kind != EntryKind.Vista), e => e.Name, e => e.MapId);
+            // Not the kinds that share one name across maps ("Vista", "Hero Challenge", "Mastery Point").
+            _landmarks = ByName(english.Entries.Where(e => e.X.HasValue
+                    && e.Kind != EntryKind.Vista && e.Kind != EntryKind.HeroChallenge && e.Kind != EntryKind.MasteryPoint),
+                e => e.Name, e => e.MapId);
             // Tyria before the Mists, then open world before instances, for coordinates that several maps cover.
             _mapRects = places.Where(p => p.IsMap && p.Rect?.Length == 4)
                 .OrderBy(p => p.Continent).ThenByDescending(p => Waypoints(p.MapId)).ToList();

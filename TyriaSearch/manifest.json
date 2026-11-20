@@ -4,7 +4,7 @@
   "namespace": "mfdavies7.tyriasearch",
   "package": "TyriaSearch.dll",
   "version": "0.1.0",
-  "description": "Search waypoints, points of interest, vistas, skills and traits, then copy, paste or whisper their chat links.",
+  "description": "Search waypoints, points of interest, hearts, NPCs, events, items, skills and traits, then copy, paste or whisper their chat links or mark them on the map.",
   "contributors": [
     { "name": "mfdavies7" }
   ],
