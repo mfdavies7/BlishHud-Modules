@@ -45,6 +45,12 @@ namespace ModuleShared
         private readonly SettingsSection[] _sections;
         private readonly List<Action> _unsubscribe = new List<Action>();
 
+        /// <summary>
+        /// Optional: whole-number settings with values shown, and typeable, as names ("Every Update", "Never"),
+        /// usually the slider's ends. The value box is widened to fit them.
+        /// </summary>
+        public Dictionary<SettingEntry<int>, Dictionary<int, string>> NamedValues { get; } = new Dictionary<SettingEntry<int>, Dictionary<int, string>>();
+
         /// <summary>Every setting in the collection, in order, then the buttons.</summary>
         public SettingsWithValuesView(SettingCollection settings, params (string text, string tooltip, Action click)[] buttons)
         {
@@ -139,8 +145,21 @@ namespace ModuleShared
             int min = hasRange ? range.MinValue : 0;
             int max = hasRange ? range.MaxValue : 100;
 
+            var named = NamedValues.TryGetValue(entry, out var names) ? names : new Dictionary<int, string>();
+            int extraBoxWidth = named.Count > 0 ? 40 : 0; // taken from the slider, so the row stays the same width
+            string Text(int value) => named.TryGetValue(value, out string name) ? name : value.ToString();
+
             var row = new Panel { Parent = parent, Size = new Point(LabelWidth + TrackBarWidth + ValueBoxWidth + 30, RowHeight) };
             string tooltip = entry.Description;
+            // Named ends are left out of the number range: "Every Update, a value from 7 to 365, or Never".
+            int low = named.ContainsKey(min) ? min + 1 : min, high = named.ContainsKey(max) ? max - 1 : max;
+            var choices = new List<string>();
+            if (named.TryGetValue(min, out string minName)) choices.Add(minName);
+            choices.Add($"a value from {low} to {high}");
+            choices.AddRange(named.Where(n => n.Key != min && n.Key != max).Select(n => $"{n.Value} ({n.Key})"));
+            if (named.TryGetValue(max, out string maxName)) choices.Add(maxName);
+            string typeHint = choices.Count == 1 ? $"Type {choices[0]}, then press Enter."
+                : $"Type {string.Join(", ", choices.Take(choices.Count - 1))} or {choices.Last()}, then press Enter.";
 
             _ = new Label
             {
@@ -160,23 +179,26 @@ namespace ModuleShared
                 Value = Clamp(entry.Value, min, max),
                 BasicTooltipText = tooltip,
                 Location = new Point(LabelWidth + 10, (RowHeight - 16) / 2),
-                Width = TrackBarWidth,
+                Width = TrackBarWidth - extraBoxWidth,
             };
 
             var valueBox = new TextBox
             {
                 Parent = row,
-                Text = entry.Value.ToString(),
-                BasicTooltipText = $"{tooltip}\n\nType a value from {min} to {max}, then press Enter.",
+                Text = Text(entry.Value),
+                BasicTooltipText = $"{tooltip}\n\n{typeHint}",
                 Location = new Point(trackBar.Right + 10, 0),
-                Size = new Point(ValueBoxWidth, RowHeight),
+                Size = new Point(ValueBoxWidth + extraBoxWidth, RowHeight),
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
 
             void ApplyTyped()
             {
-                if (int.TryParse(valueBox.Text.Trim(), out int typed)) entry.Value = Clamp(typed, min, max);
-                valueBox.Text = entry.Value.ToString(); // also puts back the old value after invalid input
+                string text = valueBox.Text.Trim();
+                var match = named.FirstOrDefault(n => string.Equals(text, n.Value, StringComparison.OrdinalIgnoreCase));
+                if (match.Value != null) entry.Value = match.Key;
+                else if (int.TryParse(text, out int typed)) entry.Value = Clamp(typed, min, max);
+                valueBox.Text = Text(entry.Value); // also puts back the old value after invalid input
             }
 
             trackBar.ValueChanged += (_, e) =>
@@ -190,7 +212,7 @@ namespace ModuleShared
             void OnSettingChanged(object sender, ValueChangedEventArgs<int> e)
             {
                 if ((int)Math.Round(trackBar.Value) != e.NewValue) trackBar.Value = Clamp(e.NewValue, min, max);
-                if (!valueBox.Focused) valueBox.Text = e.NewValue.ToString();
+                if (!valueBox.Focused) valueBox.Text = Text(e.NewValue);
             }
 
             entry.SettingChanged += OnSettingChanged;

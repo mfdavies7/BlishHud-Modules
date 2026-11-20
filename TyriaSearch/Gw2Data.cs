@@ -156,6 +156,8 @@ namespace TyriaSearch
         public sealed class NpcCacheFile
         {
             public int Version { get; set; }
+            /// <summary>The game build when downloaded; 0 in files from before it was saved, or before Mumble connected.</summary>
+            public int GameBuild { get; set; }
             public DateTime DownloadedUtc { get; set; }
             public List<WikiNpc> Npcs { get; set; }
             /// <summary>/v2/files ids (map_bank, map_vendor…) to icon URLs.</summary>
@@ -179,6 +181,8 @@ namespace TyriaSearch
         public sealed class EventCacheFile
         {
             public int Version { get; set; }
+            /// <summary>The game build when downloaded; 0 in files from before it was saved, or before Mumble connected.</summary>
+            public int GameBuild { get; set; }
             public DateTime DownloadedUtc { get; set; }
             public List<WikiEvent> Events { get; set; }
         }
@@ -543,7 +547,7 @@ namespace TyriaSearch
         // ---- NPCs ----
 
         /// <summary>About 20,000 NPCs and 11,000 coordinates in roughly 150 wiki requests; takes a few minutes.</summary>
-        public async Task<NpcCacheFile> DownloadNpcsAsync(IProgress<string> progress, CancellationToken ct)
+        public async Task<NpcCacheFile> DownloadNpcsAsync(int gameBuild, IProgress<string> progress, CancellationToken ct)
         {
             var iconsTask = GetAsync<List<FileDto>>($"{Api}files?ids=all", _apiSlots, ct);
 
@@ -576,6 +580,7 @@ namespace TyriaSearch
             var cache = new NpcCacheFile
             {
                 Version = CacheVersion,
+                GameBuild = gameBuild,
                 DownloadedUtc = DateTime.UtcNow,
                 Npcs = npcs,
                 Icons = (await iconsTask).ToDictionary(f => f.Id, f => f.Icon),
@@ -590,7 +595,7 @@ namespace TyriaSearch
         /// About 4,500 current events and their coordinates in roughly 30 wiki requests. That's close to the ask API's
         /// paging limit: if the list is cut short, it's fetched again in groups by first letter, like NPCs.
         /// </summary>
-        public async Task<EventCacheFile> DownloadEventsAsync(IProgress<string> progress, CancellationToken ct)
+        public async Task<EventCacheFile> DownloadEventsAsync(int gameBuild, IProgress<string> progress, CancellationToken ct)
         {
             const string condition = "[[Has context::Event]][[Is historical::false]]";
             const string printouts = "|?Starts in|?Located in tree|?Has event level|?Has event type";
@@ -624,9 +629,23 @@ namespace TyriaSearch
                 };
             }).ToList();
 
-            var cache = new EventCacheFile { Version = CacheVersion, DownloadedUtc = DateTime.UtcNow, Events = events };
+            var cache = new EventCacheFile { Version = CacheVersion, GameBuild = gameBuild, DownloadedUtc = DateTime.UtcNow, Events = events };
             Save(EventsPath, cache);
             return cache;
+        }
+
+        /// <summary>Records the game build on wiki data saved without one, so a later game update can be noticed.</summary>
+        public void StampNpcs(NpcCacheFile cache, int gameBuild)
+        {
+            cache.GameBuild = gameBuild;
+            Save(NpcsPath, cache);
+        }
+
+        /// <inheritdoc cref="StampNpcs"/>
+        public void StampEvents(EventCacheFile cache, int gameBuild)
+        {
+            cache.GameBuild = gameBuild;
+            Save(EventsPath, cache);
         }
 
         private async Task<List<string>> AllTitleStartsAsync(CancellationToken ct) => TitleStarts.Concat(await OtherTitleStartsAsync(ct)).ToList();

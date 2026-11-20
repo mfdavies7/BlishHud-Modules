@@ -31,8 +31,10 @@ namespace TyriaSearch
     {
         private static readonly Logger Logger = Logger.GetLogger<TyriaSearchModule>();
 
-        // Between full downloads; game updates in between only fetch what was added.
-        private static readonly TimeSpan MaxDataAge = TimeSpan.FromDays(30);
+        // Full Download Every (Days): the slider's minimum stands for Every Update and its maximum for Never; otherwise
+        // days between full downloads, with game updates in between only fetching what was added.
+        private const int EveryUpdate = 6;
+        private const int Never = 366;
 
         private SettingEntry<KeyBinding> _openKey;
         private SettingEntry<KeyBinding> _clearMarkerKey;
@@ -42,6 +44,7 @@ namespace TyriaSearch
         private SettingEntry<bool> _learnPortals;
         private SettingEntry<KeyBinding> _gameMapKey;
         private SettingEntry<SearchLanguage> _secondLanguage;
+        private SettingEntry<int> _fullDownloadDays;
         private SettingEntry<bool> _searchItems;
         private SettingEntry<bool> _searchNpcs;
         private SettingEntry<bool> _searchEvents;
@@ -144,12 +147,16 @@ namespace TyriaSearch
             _secondLanguage = settings.DefineSetting("SecondLanguage", SearchLanguage.None,
                 () => "Second Search Language",
                 () => "Names are shown in Blish HUD's language (Blish HUD settings, Overlay, Language). Searches also match names in this language, so you can find what guildmates call something. Each language is a separate download.");
+            _fullDownloadDays = settings.DefineSetting("FullDownloadDays", 30,
+                () => "Full Download Every (Days)",
+                () => "How often to download all search data again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. Every Update: download everything after each game update instead. Never: only what game updates add, and whatever is missing. Update Data downloads everything now.");
+            _fullDownloadDays.SetRange(EveryUpdate, Never);
             _searchNpcs = settings.DefineSetting("SearchNpcs", true,
                 () => "Search NPCs",
-                () => "Include NPCs from the wiki, with where they are, their nearest waypoint and a map marker. NPC names are in English. About 2 MB from the wiki (a few minutes), downloaded monthly; also downloads English map data if neither search language is English.");
+                () => "Include NPCs from the wiki, with where they are, their nearest waypoint and a map marker. NPC names are in English. About 2 MB from the wiki (a few minutes), downloaded again as often as Full Download Every (Days) says; also downloads English map data if neither search language is English.");
             _searchEvents = settings.DefineSetting("SearchEvents", true,
                 () => "Search Events",
-                () => "Include current events from the wiki, with where they start, their nearest waypoint and a map marker. Event names are in English. About 1 MB from the wiki (under a minute), downloaded monthly; also downloads English map data if neither search language is English.");
+                () => "Include current events from the wiki, with where they start, their nearest waypoint and a map marker. Event names are in English. About 1 MB from the wiki (under a minute), downloaded again as often as Full Download Every (Days) says; also downloads English map data if neither search language is English.");
             _searchItems = settings.DefineSetting("SearchItems", true,
                 () => "Search Items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
@@ -204,13 +211,16 @@ namespace TyriaSearch
                     _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
                     _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchItems, _searchSkills, _searchTraits, _searchWiki,
                 }),
-            new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage },
+            new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
                 ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
             new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
-            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _keyDelayMs }));
+            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _keyDelayMs }))
+        {
+            NamedValues = { [_fullDownloadDays] = new Dictionary<int, string> { [EveryUpdate] = "Every Update", [Never] = "Never" } },
+        };
 
         internal void OpenSettingsWindow()
         {
@@ -263,6 +273,7 @@ namespace TyriaSearch
             _clearMarkerKey.Value.Enabled = true;
             _clearMarkerKey.Value.Activated += ClearMarkerKey_Activated;
             _secondLanguage.SettingChanged += SecondLanguage_SettingChanged;
+            _fullDownloadDays.SettingChanged += FullDownloadDays_SettingChanged;
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
             _searchEvents.SettingChanged += DataSetting_SettingChanged;
@@ -351,6 +362,7 @@ namespace TyriaSearch
             _clearMarkerKey.Value.Enabled = false;
             _clearMarkerKey.Value.Activated -= ClearMarkerKey_Activated;
             _secondLanguage.SettingChanged -= SecondLanguage_SettingChanged;
+            _fullDownloadDays.SettingChanged -= FullDownloadDays_SettingChanged;
             _searchItems.SettingChanged -= DataSetting_SettingChanged;
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
             _searchEvents.SettingChanged -= DataSetting_SettingChanged;
@@ -406,6 +418,8 @@ namespace TyriaSearch
         private void MapDrawing_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ApplyMapDrawing();
         private void SecondLanguage_SettingChanged(object sender, ValueChangedEventArgs<SearchLanguage> e) => RequestRefresh(force: false, restart: true);
         private void DataSetting_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RequestRefresh(force: false, restart: true);
+        // Shortening it may make saved data due now. Not restarted: dragging the slider changes it many times.
+        private void FullDownloadDays_SettingChanged(object sender, ValueChangedEventArgs<int> e) => RequestRefresh(force: false, restart: false);
         private void Overlay_UserLocaleChanged(object sender, ValueEventArgs<System.Globalization.CultureInfo> e) => RequestRefresh(force: false, restart: true);
         // Runs once Mumble connects, and again after a game update; data is only downloaded if the build changed.
         private void Info_BuildIdChanged(object sender, ValueEventArgs<int> e) => RequestRefresh(force: false, restart: false);
@@ -515,7 +529,7 @@ namespace TyriaSearch
                 foreach (string language in mainLanguages)
                 {
                     var saved = data.MainFor(language);
-                    if (force || IsStale(saved?.DownloadedUtc))
+                    if (force || IsStale(saved?.DownloadedUtc, saved?.GameBuild ?? 0, build))
                         await Download($"{LanguageName(language)} places, skills and traits",
                             async progress => data.Main[language] = await _data.DownloadMainAsync(language, build, await Fingerprint(), progress, ct));
                     else if (IsOlderBuild(saved.GameBuild, build))
@@ -528,11 +542,21 @@ namespace TyriaSearch
                         });
                 }
 
-                // The wiki changes a little at a time; game updates don't matter to it.
-                if (data.UseNpcs && (force || IsStale(data.Npcs?.DownloadedUtc)))
-                    await Download("NPCs", async progress => data.Npcs = await _data.DownloadNpcsAsync(progress, ct));
-                if (data.UseEvents && (force || IsStale(data.Events?.DownloadedUtc)))
-                    await Download("events", async progress => data.Events = await _data.DownloadEventsAsync(progress, ct));
+                // The wiki changes a little at a time, so only Every Update ties it to game updates.
+                // Saved without a build (an older file, or before Mumble connected): note the build rather than download.
+                try
+                {
+                    if (data.UseNpcs && data.Npcs != null && data.Npcs.GameBuild == 0 && build > 0) _data.StampNpcs(data.Npcs, build);
+                    if (data.UseEvents && data.Events != null && data.Events.GameBuild == 0 && build > 0) _data.StampEvents(data.Events, build);
+                }
+                catch (Exception ex) when (!(ex is OperationCanceledException))
+                {
+                    Logger.Warn(ex, "Couldn't save the game build with the wiki data.");
+                }
+                if (data.UseNpcs && (force || IsStale(data.Npcs?.DownloadedUtc, data.Npcs?.GameBuild ?? 0, build)))
+                    await Download("NPCs", async progress => data.Npcs = await _data.DownloadNpcsAsync(build, progress, ct));
+                if (data.UseEvents && (force || IsStale(data.Events?.DownloadedUtc, data.Events?.GameBuild ?? 0, build)))
+                    await Download("events", async progress => data.Events = await _data.DownloadEventsAsync(build, progress, ct));
 
                 // A game update only fetches the items it added.
                 if (data.UseItems)
@@ -540,7 +564,7 @@ namespace TyriaSearch
                     foreach (string language in data.Languages)
                     {
                         var saved = data.ItemsFor(language);
-                        if (force || IsStale(saved?.DownloadedUtc))
+                        if (force || IsStale(saved?.DownloadedUtc, saved?.GameBuild ?? 0, build))
                             await Download($"{LanguageName(language)} items",
                                 async progress => data.Items[language] = await _data.DownloadItemsAsync(language, build, progress, ct));
                         else if (IsOlderBuild(saved.GameBuild, build))
@@ -655,8 +679,19 @@ namespace TyriaSearch
             }, TaskScheduler.Default);
         }
 
-        /// <summary>Missing, or due a full download to pick up renames and fixes that adding new things doesn't.</summary>
-        private static bool IsStale(DateTime? downloadedUtc) => downloadedUtc == null || DateTime.UtcNow - downloadedUtc.Value > MaxDataAge;
+        /// <summary>
+        /// Missing, or due a full download to pick up renames and fixes that adding new things doesn't: after
+        /// Full Download Every (Days), or with Every Update, once the game has updated since; with Never, only when missing.
+        /// Data saved before Mumble connected has no build; its first check is the usual partial one, not a second full download.
+        /// </summary>
+        private bool IsStale(DateTime? downloadedUtc, int savedBuild, int currentBuild)
+        {
+            if (downloadedUtc == null) return true;
+            int days = _fullDownloadDays.Value;
+            if (days >= Never) return false;
+            if (days <= EveryUpdate) return savedBuild > 0 && IsOlderBuild(savedBuild, currentBuild);
+            return DateTime.UtcNow - downloadedUtc.Value > TimeSpan.FromDays(days);
+        }
 
         /// <summary>The game updated since the data was last checked. The build is 0 until Mumble connects.</summary>
         private static bool IsOlderBuild(int savedBuild, int currentBuild) => currentBuild > 0 && savedBuild != currentBuild;

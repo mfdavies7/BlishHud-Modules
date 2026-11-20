@@ -80,7 +80,7 @@ Events come from the wiki: about 4,000 current ones, with their level and type (
 
 Portals are searchable too, under **Portals**: "Portal to Kessex Hills", "Asura Gate to Hoelbrak", "Dungeon Entrance to Ascalonian Catacombs", "Raid Entrance to Spirit Vale". Searching a map's name also finds the portals on that map, "portal" or "gate" finds every kind, and two map names find the portals between them, the one from the first to the second first ("Black Citadel to Lion's Arch", "gate from Hoelbrak"). Positions are exact, the chat link is the nearest waypoint, and the wiki opens the destination's page. Portal names are in English.
 
-Data is downloaded from the GW2 API and the wiki the first time, then in full once a month. After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
+Data is downloaded from the GW2 API and the wiki the first time, then in full every 30 days (see **Full Download Every (Days)**). After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
 
 - Places, skills and traits: about 1.5 MB per language, under a minute.
 - NPCs: about 2 MB, a few minutes (the wiki is slower than the API).
@@ -96,6 +96,7 @@ The settings are in their own window, in sections (Search Window, Search Options
 - **Open Search Hotkey** – unset by default.
 - **Swap Icon Clicks** (off) – left-click the Tyria Search icon for the settings and right-click it for the search window.
 - **Second Search Language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
+- **Full Download Every (Days)** (30, Every Update, 7–365 or Never) – how often all search data is downloaded again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. At the lowest setting, Every Update, everything (including NPCs and events) is downloaded again after each game update instead. At the highest, Never, nothing is downloaded again except what game updates add and anything missing; NPCs and events then stay as first downloaded until you press **Update Data**.
 - **Open Map After Show on Map** (on) – opens the world map after Show on Map, if it isn't open already.
 - **Game's Map Key** (M) – the World Map key from the game's Control Options, pressed by Open Map After Show on Map.
 - **Clear Map Markers Hotkey** (unbound) – removes all map markers, also while the map is open.
