@@ -168,7 +168,7 @@ namespace TyriaSearch
             _searchItems = settings.DefineSetting("SearchItems", true,
                 () => "Search Items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
-            // Already downloaded with the places, skills and traits; turning one off only leaves it out of the results.
+            // Downloaded with the places, which every result's map position needs; turning one off only leaves it out of the results.
             _searchWaypoints = settings.DefineSetting("SearchWaypoints", true, () => "Search Waypoints", () => "Include waypoints in the results.");
             _searchPointsOfInterest = settings.DefineSetting("SearchPointsOfInterest", true, () => "Search Points of Interest", () => "Include points of interest and other landmarks in the results.");
             _searchVistas = settings.DefineSetting("SearchVistas", true, () => "Search Vistas", () => "Include vistas in the results.");
@@ -177,11 +177,13 @@ namespace TyriaSearch
             _searchMasteryPoints = settings.DefineSetting("SearchMasteryPoints", true, () => "Search Mastery Points", () => "Include mastery points in the results. They have no names; search for the map or \"mastery point\".");
             _searchAdventures = settings.DefineSetting("SearchAdventures", true, () => "Search Adventures", () => "Include adventures in the results.");
             _searchPortals = settings.DefineSetting("SearchPortals", true, () => "Search Portals", () => "Include zone portals, asura gates and dungeon, raid and fractal entrances, bundled and learned, in the results.");
-            _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search Skills", () => "Include skills in the results.");
-            _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search Traits", () => "Include traits in the results.");
+            _searchSkills = settings.DefineSetting("SearchSkills", true, () => "Search Skills",
+                () => "Include skills in the results. Off: skills aren't downloaded, but those already downloaded are kept for when you turn it back on.");
+            _searchTraits = settings.DefineSetting("SearchTraits", true, () => "Search Traits",
+                () => "Include traits in the results. Off: traits aren't downloaded, but those already downloaded are kept for when you turn it back on.");
             _searchWiki = settings.DefineSetting("SearchWiki", true,
-                () => "Search the Wiki When Nothing Matches",
-                () => "When nothing here matches, ask the wiki and show what it finds. Off: offer to open a wiki search in your browser instead.");
+                () => "Search the Wiki",
+                () => "In Everything, also ask the wiki once you pause typing, and list the pages it finds below the results here. In other categories, ask it when nothing here matches. Off: offer to open a wiki search in your browser instead. The Wiki category always asks it.");
             _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
                 () => "Restore Clipboard",
                 () => "After Paste into Chat or Whisper to Yourself, put back what you had copied before. Those actions type through the clipboard.");
@@ -220,7 +222,7 @@ namespace TyriaSearch
                     _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchItems, _searchSkills, _searchTraits, _searchWiki,
                 }),
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
-                ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
+                ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
             new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _zoomOutMap, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
@@ -255,6 +257,7 @@ namespace TyriaSearch
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
             _mapMarker = new MapMarker(ContinentOf, IconFor, BundledIconFor) { Parent = GameService.Graphics.SpriteScreen };
+            _mapMarker.RemoveRequested += MapMarker_RemoveRequested;
             using (var portals = ModuleParameters.ContentsManager.GetFileStream("portals.json"))
                 _bundledPortals = Portal.Load(portals);
             _portalLearner = new PortalLearner(directory);
@@ -377,6 +380,7 @@ namespace TyriaSearch
             _searchEvents.SettingChanged -= DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
+            if (_mapMarker != null) _mapMarker.RemoveRequested -= MapMarker_RemoveRequested;
             _showPortals.SettingChanged -= MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
@@ -409,14 +413,20 @@ namespace TyriaSearch
             else ToggleSettingsWindow();
         }
 
-        // Search options that only filter the downloaded data; NPCs, events and items also change what's downloaded.
+        // Search options that filter the downloaded data. Skills and traits are also left out of later downloads, and
+        // downloaded when turned back on; NPCs, events and items are handled by DataSetting_SettingChanged.
         private IEnumerable<SettingEntry<bool>> SearchOptions => new[]
         {
             _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits,
             _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures,
         };
 
-        private void SearchOption_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RebuildIndex();
+        private void SearchOption_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
+        {
+            // Turned on, the refresh shows what was saved, then downloads it if it was left out.
+            if (e.NewValue && (sender == _searchSkills || sender == _searchTraits)) RequestRefresh(force: false, restart: true);
+            else RebuildIndex();
+        }
 
         private void PortalLearner_Changed(bool listChanged)
         {
@@ -443,7 +453,7 @@ namespace TyriaSearch
             if (icon?.StartsWith(SearchEntry.AssetIcon) == true && int.TryParse(icon.Substring(SearchEntry.AssetIcon.Length), out int assetId))
                 return AsyncTexture2D.FromAssetId(assetId);
             if (icon?.StartsWith(Gw2Data.WikiImages) == true) return WikiIcon(icon);
-            // Skills the wiki has no icon for either keep the API's missing icon.
+            // Skills, traits and items the wiki has no icon for either keep the API's missing icon.
             if (!Gw2Data.IsMissingIcon(icon) && !icon.StartsWith(SearchEntry.BundledIcon))
                 return GameService.Content.GetRenderServiceTexture(icon);
             return BundledIconFor(entry);
@@ -477,12 +487,56 @@ namespace TyriaSearch
                 if (_unloading.IsCancellationRequested) return;
                 using (var stream = new System.IO.MemoryStream(bytes))
                 using (var context = GameService.Graphics.LendGraphicsDeviceContext())
-                    texture.SwapTexture(TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream));
+                    texture.SwapTexture(TrimPadding(context.GraphicsDevice, TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream)));
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
                 Logger.Debug(ex, $"Couldn't load the wiki icon {url}.");
             }
+        }
+
+        // Game icons are 64 pixels or less; a bigger image whose picture fills less than this share of it is padded.
+        private const int PaddedIconMinSize = 65;
+        private const float PaddedIconMaxFill = 0.85f;
+
+        /// <summary>
+        /// Some wiki icons (the generic Monster Skill one) are a small picture in the middle of a large black or
+        /// transparent canvas, so they'd look tiny. Cuts out the square around the picture so it fills the icon's space.
+        /// </summary>
+        private static Texture2D TrimPadding(GraphicsDevice device, Texture2D texture)
+        {
+            int width = texture.Width, height = texture.Height;
+            if (width < PaddedIconMinSize || height < PaddedIconMinSize) return texture;
+            var pixels = new Color[width * height];
+            texture.GetData(pixels);
+
+            // Near-black or near-transparent pixels are canvas.
+            int left = width, top = height, right = -1, bottom = -1;
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                var pixel = pixels[y * width + x];
+                if (pixel.A <= 16 || pixel.R + pixel.G + pixel.B <= 30) continue;
+                if (x < left) left = x;
+                if (x > right) right = x;
+                if (y < top) top = y;
+                if (y > bottom) bottom = y;
+            }
+            if (right < 0) return texture; // all canvas
+            int pictureWidth = right - left + 1, pictureHeight = bottom - top + 1;
+            if (pictureWidth > width * PaddedIconMaxFill || pictureHeight > height * PaddedIconMaxFill) return texture;
+
+            // A square around the picture's centre, inside the image, so the icon isn't stretched.
+            int size = Math.Min(Math.Max(pictureWidth, pictureHeight), Math.Min(width, height));
+            int startX = MathHelper.Clamp(left + pictureWidth / 2 - size / 2, 0, width - size);
+            int startY = MathHelper.Clamp(top + pictureHeight / 2 - size / 2, 0, height - size);
+            var cropped = new Color[size * size];
+            for (int y = 0; y < size; y++) Array.Copy(pixels, (startY + y) * width + startX, cropped, y * size, size);
+
+            var trimmed = new Texture2D(device, size, size);
+            trimmed.SetData(cropped);
+            texture.Dispose();
+            return trimmed;
         }
 
         /// <summary>The result's bundled icon, else its kind's; also shown while its own icon downloads.</summary>
@@ -512,6 +566,8 @@ namespace TyriaSearch
             public Gw2Data.NpcCacheFile Npcs;
             public Gw2Data.EventCacheFile Events;
             public bool UseItems, UseNpcs, UseEvents;
+            // Skill, Trait: what's downloaded with the places. Left out, the saved ones are kept but not updated.
+            public List<EntryKind> MainParts;
 
             public Gw2Data.CacheFile MainFor(string language) => language != null && Main.TryGetValue(language, out var c) ? c : null;
             public Gw2Data.CacheFile ItemsFor(string language) => language != null && Items.TryGetValue(language, out var c) ? c : null;
@@ -537,7 +593,11 @@ namespace TyriaSearch
             var data = new DataSet
             {
                 Languages = SearchLanguages(), UseItems = _searchItems.Value, UseNpcs = _searchNpcs.Value, UseEvents = _searchEvents.Value,
+                MainParts = new List<EntryKind>(),
             };
+            if (_searchSkills.Value) data.MainParts.Add(EntryKind.Skill);
+            if (_searchTraits.Value) data.MainParts.Add(EntryKind.Trait);
+            string mainWhat = PartsName(data.MainParts, "places");
             // NPC and event locations are matched by English place names, since the wiki is English.
             var mainLanguages = data.UseNpcs || data.UseEvents ? data.Languages.Union(new[] { "en" }).ToArray() : data.Languages;
             var failed = new List<string>();
@@ -548,12 +608,20 @@ namespace TyriaSearch
                 catch (Exception ex) { Logger.Warn(ex, $"Couldn't read saved {what}; downloading it again."); return null; }
             }
 
-            // Each download stands alone: if the wiki is down, items still update.
-            async Task Download(string what, Func<IProgress<string>, Task> download)
+            void ShowStatus(string text)
+            {
+                if (!ct.IsCancellationRequested) _status = text;
+            }
+
+            // Each download stands alone: if the wiki is down, items still update. The status names what's being
+            // downloaded, then each step replaces it ("Updating English map data, 3 of 40 floors…").
+            // language: null for the wiki's data, which is English only and isn't named by language.
+            async Task Download(string what, string language, Func<IProgress<string>, Task> download)
             {
                 _downloading = true;
-                var progress = new StatusProgress(text => { if (!ct.IsCancellationRequested) _status = $"Updating {what}: {text}"; });
-                progress.Report("starting…");
+                string subject = language == null ? "" : LanguageName(language) + " ";
+                ShowStatus($"Updating {subject}{what}…");
+                var progress = new StatusProgress(text => ShowStatus($"Updating {subject}{text}"));
                 try
                 {
                     await download(progress);
@@ -561,8 +629,8 @@ namespace TyriaSearch
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
-                    Logger.Warn(ex, $"Updating {what} failed.");
-                    failed.Add(what);
+                    Logger.Warn(ex, $"Updating {subject}{what} failed.");
+                    failed.Add(subject + what);
                 }
             }
 
@@ -581,20 +649,28 @@ namespace TyriaSearch
 
                 // Most useful first: places, skills and traits, then NPCs and events, then the slow item download.
                 // A game update only re-downloads places, skills and traits if maps, skills or traits were added or removed.
+                // Skills and traits whose search option is off aren't downloaded; what was saved of them is kept.
                 foreach (string language in mainLanguages)
                 {
                     var saved = data.MainFor(language);
                     if (force || IsStale(saved?.DownloadedUtc, saved?.GameBuild ?? 0, build))
-                        await Download($"{LanguageName(language)} places, skills and traits",
-                            async progress => data.Main[language] = await _data.DownloadMainAsync(language, build, await Fingerprint(), null, progress, ct));
+                        await Download(mainWhat, language, async progress =>
+                            data.Main[language] = await _data.DownloadMainAsync(language, build, await Fingerprint(), saved, true, data.MainParts, progress, ct));
                     else if (IsOlderBuild(saved.GameBuild, build))
-                        await Download($"{LanguageName(language)} places, skills and traits", async progress =>
+                        await Download(mainWhat, language, async progress =>
                         {
-                            progress.Report("checking for changes…");
+                            ShowStatus($"Checking {LanguageName(language)} {mainWhat} for changes…");
                             string current = await Fingerprint();
                             if (current == saved.Fingerprint) _data.ConfirmMain(saved, build);
-                            else data.Main[language] = await _data.DownloadMainAsync(language, build, current, saved, progress, ct);
+                            else data.Main[language] = await _data.DownloadMainAsync(language, build, current, saved, false, data.MainParts, progress, ct);
                         });
+
+                    // Turned back on after a download that left them out.
+                    var latest = data.MainFor(language);
+                    var missing = data.MainParts.Where(k => latest?.Skipped?.Contains(k) == true).ToList();
+                    if (missing.Count > 0)
+                        await Download(PartsName(missing, null), language,
+                            async progress => data.Main[language] = await _data.DownloadSkippedAsync(latest, missing, progress, ct));
                 }
 
                 // The wiki changes a little at a time, so only Every Update ties it to game updates.
@@ -609,9 +685,9 @@ namespace TyriaSearch
                     Logger.Warn(ex, "Couldn't save the game build with the wiki data.");
                 }
                 if (data.UseNpcs && (force || IsStale(data.Npcs?.DownloadedUtc, data.Npcs?.GameBuild ?? 0, build)))
-                    await Download("NPCs", async progress => data.Npcs = await _data.DownloadNpcsAsync(build, progress, ct));
+                    await Download("NPCs", null, async progress => data.Npcs = await _data.DownloadNpcsAsync(build, progress, ct));
                 if (data.UseEvents && (force || IsStale(data.Events?.DownloadedUtc, data.Events?.GameBuild ?? 0, build)))
-                    await Download("events", async progress => data.Events = await _data.DownloadEventsAsync(build, progress, ct));
+                    await Download("events", null, async progress => data.Events = await _data.DownloadEventsAsync(build, progress, ct));
 
                 // A game update only fetches the items it added.
                 if (data.UseItems)
@@ -620,10 +696,10 @@ namespace TyriaSearch
                     {
                         var saved = data.ItemsFor(language);
                         if (force || IsStale(saved?.DownloadedUtc, saved?.GameBuild ?? 0, build))
-                            await Download($"{LanguageName(language)} items",
+                            await Download("items", language,
                                 async progress => data.Items[language] = await _data.DownloadItemsAsync(language, build, progress, ct));
                         else if (IsOlderBuild(saved.GameBuild, build))
-                            await Download($"{LanguageName(language)} items",
+                            await Download("items", language,
                                 async progress => data.Items[language] = await _data.UpdateItemsAsync(saved, build, progress, ct));
                     }
                 }
@@ -773,6 +849,16 @@ namespace TyriaSearch
             return second == null || second == primary ? new[] { primary } : new[] { primary, second };
         }
 
+        /// <summary>"places, skills and traits", "places and skills", "traits"…: <paramref name="first"/> (or nothing), then the parts.</summary>
+        private static string PartsName(IEnumerable<EntryKind> parts, string first)
+        {
+            var names = new List<string>();
+            if (first != null) names.Add(first);
+            if (parts.Contains(EntryKind.Skill)) names.Add("skills");
+            if (parts.Contains(EntryKind.Trait)) names.Add("traits");
+            return names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1];
+        }
+
         private static string LanguageName(string code) => code switch
         {
             "de" => "German",
@@ -868,7 +954,7 @@ namespace TyriaSearch
         internal void ShowOnMap(SearchItem item)
         {
             if (!IsMarked(item)) _mapMarker.Targets.Add(item);
-            _window.ShowMessage($"{item.Entry.Name} is marked on the world map. Open the map (M) to see it.");
+            _window.ShowMessage($"{item.Entry.Name} is marked on the world map. Open the map (M) to see it; right-click the marker to remove it.");
             if (_openMapOnShow.Value && !GameService.Gw2Mumble.UI.IsMapOpen) _ = OpenMapAsync();
         }
 
@@ -972,9 +1058,7 @@ namespace TyriaSearch
         internal void ClearMapMarker()
         {
             if (_mapMarker.Targets.Count == 0) return;
-            _mapMarker.Targets.Clear();
-            _window.ShowMessage("Map markers cleared.");
-            if (GameService.Gw2Mumble.UI.IsMapOpen) ScreenNotification.ShowNotification("Tyria Search: Map markers cleared.");
+            _mapMarker.Targets.Clear(); // the markers vanishing says enough
         }
 
         internal void RemoveMapMarker(SearchItem item)
@@ -982,6 +1066,9 @@ namespace TyriaSearch
             _mapMarker.Targets.Remove(MarkerFor(item));
             _window.ShowMessage($"{item.Entry.Name} removed from the world map.");
         }
+
+        // Remove Icon in a marker's right-click menu; the marker vanishing says enough.
+        private void MapMarker_RemoveRequested(SearchItem item) => RemoveMapMarker(item);
 
         internal void ToggleFavourite(SearchItem item)
         {
@@ -1063,12 +1150,22 @@ namespace TyriaSearch
             _ => null,
         };
 
-        /// <summary>Unnamed vistas, hero challenges and mastery points are looked up by their map (their context).</summary>
+        /// <summary>
+        /// Unnamed vistas, hero challenges and mastery points are looked up by their map: the last part of their context
+        /// ("Shaemoor Fields · Queensdale").
+        /// </summary>
         private static string WikiTerm(SearchEntry entry) =>
-            entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? entry.Context
-            : entry.Kind == EntryKind.HeroChallenge || entry.Kind == EntryKind.MasteryPoint ? entry.Context
+            entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? MapOf(entry)
+            : entry.Kind == EntryKind.HeroChallenge || entry.Kind == EntryKind.MasteryPoint ? MapOf(entry)
             : entry.Kind == EntryKind.Portal ? entry.Name.Substring(entry.Name.IndexOf(Portal.NameSeparator) + Portal.NameSeparator.Length)
             : entry.Name;
+
+        private static string MapOf(SearchEntry entry)
+        {
+            string context = entry.Context ?? "";
+            int last = context.LastIndexOf(" · ", StringComparison.Ordinal);
+            return last < 0 ? context : context.Substring(last + 3);
+        }
 
         private sealed class StatusProgress : IProgress<string>
         {

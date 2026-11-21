@@ -49,7 +49,8 @@ namespace TyriaSearch
         public SearchEntry Alternate { get; }
 
         internal readonly string[] Names;
-        internal readonly string[] Contexts;
+        /// <summary>Each language's context split into its parts ("Shaemoor Fields · Queensdale"), normalized.</summary>
+        internal readonly string[][] ContextParts;
         internal readonly string[] NamesWithContext;
 
         internal SearchItem(SearchEntry entry, SearchEntry alternate)
@@ -58,7 +59,8 @@ namespace TyriaSearch
             Alternate = alternate;
             var languages = alternate == null ? new[] { entry } : new[] { entry, alternate };
             Names = languages.Select(e => SearchIndex.Normalize(e.Name)).ToArray();
-            Contexts = languages.Select(e => SearchIndex.Normalize(e.Context)).ToArray();
+            ContextParts = languages.Select(e => (e.Context ?? "").Split(new[] { " · " }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(SearchIndex.Normalize).ToArray()).ToArray();
             NamesWithContext = languages.Select(e => SearchIndex.Normalize(e.Kind == EntryKind.Portal
                 // "portal"/"gate" find every kind of portal; the map it's on (context) before the destination lets "from A to B" match in order
                 ? "portal gate from " + e.Context + " " + e.Name
@@ -122,8 +124,8 @@ namespace TyriaSearch
         /// <summary>
         /// Every query word must appear in the name or context (map, profession) of one language.
         /// Exact names first, then names starting with the query; the rest by kind (<see cref="KindOrder"/>), and within
-        /// a kind: every word starts a word of the name, context starts with the query (a map name lists that map's
-        /// landmarks), every word is in the name, the words in query order across name and context (for portals, origin map then
+        /// a kind: every word starts a word of the name, a part of the context starts with the query (a map or area name
+        /// lists its landmarks), every word is in the name, the words in query order across name and context (for portals, origin map then
         /// destination), then other matches that need the context.
         /// Ties: player skills before unlabelled NPC copies, shorter names first.
         /// </summary>
@@ -163,7 +165,7 @@ namespace TyriaSearch
                 int score = name == query ? 0
                     : name.StartsWith(query, StringComparison.Ordinal) ? 1
                     : words.All(w => StartsWord(name, w)) ? 2
-                    : item.Contexts[i].StartsWith(query, StringComparison.Ordinal) ? 3
+                    : item.ContextParts[i].Any(part => part.StartsWith(query, StringComparison.Ordinal)) ? 3
                     : words.All(name.Contains) ? 4
                     : InOrder(full, words) ? 5
                     : 6;

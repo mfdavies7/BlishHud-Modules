@@ -89,14 +89,14 @@ namespace TyriaSearch
         public bool Contains(int mapId, float x, float y) =>
             _mapsById.TryGetValue(mapId, out var map) && Inside(map, x, y);
 
-        /// <summary>The map at exact coordinates, with the nearest named area; null if no map covers them.</summary>
+        /// <summary>The map at exact coordinates, with the named area they're in; null if no map covers them.</summary>
         public Placement? At(float x, float y, int preferredMapId = 0)
         {
             var map = preferredMapId != 0 && Contains(preferredMapId, x, y)
                 ? _mapsById[preferredMapId]
                 : _mapRects.FirstOrDefault(m => Inside(m, x, y));
             if (map == null) return null;
-            var area = _areasByMap[map.MapId].OrderBy(a => DistanceSquared(a.X, a.Y, x, y)).FirstOrDefault();
+            var area = Gw2Data.AreaAt(_areasByMap[map.MapId], x, y);
             return new Placement { Area = area?.Name, MapId = map.MapId, X = x, Y = y };
         }
 

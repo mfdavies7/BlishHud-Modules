@@ -62,15 +62,15 @@ The hint icon (`WikiSearch/ref/textures/WikiSearch.png`) is from [KenediaDev's T
 Search waypoints, points of interest, vistas, renown hearts, hero challenges, mastery points, adventures, NPCs, events, items, skills and traits by name, map or chat code, then copy, paste or whisper their chat links, or mark them on the map.
 Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; written from scratch.
 
-Open it with the magnifier icon at the top left or the hotkey, and type. Results update as you type, and a map name lists that map's landmarks.
+Open it with the magnifier icon at the top left or the hotkey, and type. Results update as you type, and a map or area name lists its landmarks. Under each result is what it is, then for anything on the map its area and map ("Waypoint · Shaemoor Fields · Queensdale"), followed by details such as level or services.
 
 - **Click** a result to copy its chat link (changeable in settings). For an NPC, that's the waypoint nearest to them.
 - **Enter** copies the top result, closes the window and returns to the game, ready to paste.
 - **Right-click** a result for the menu (changeable in settings): Copy Chat Link, Paste into Chat or Whisper to Yourself; Show on Map / Remove from Map; Copy /wiki Command; Open Wiki Page; Add to / Remove from Favourites; Clear All Map Markers. **Shift-click** always opens the menu.
-- **Show on Map** marks the result on the world map (M); you can mark several at once. If one is off screen, its marker sits at the screen edge pointing the way. Remove one from its menu, or all with the **Clear Markers** button next to the status line, the menu or the Clear Map Markers Hotkey.
-- With the search box empty, the window shows your favourites. Item names are coloured by rarity. Skills the API has no icon for get the wiki's (saved in `tyriasearch/wiki-icons`). Results without a game icon (most NPCs, many wiki pages) get a plain one for their kind, which is also shown while an icon downloads.
-- If nothing matches, it asks the wiki live and lists the pages it finds (places, NPCs, objects, items), placed on the map and linked to their nearest waypoint where possible. Item pages get the item's chat link. A last result opens the full wiki search in your browser.
-- The **Wiki** category in the dropdown skips the downloaded data and asks the wiki straight away, once you pause typing (3 letters or more). It works even with Search the Wiki When Nothing Matches off.
+- **Show on Map** marks the result on the world map (M); you can mark several at once. If one is off screen, its marker sits at the screen edge pointing the way. Markers don't get in the way of the map: clicks and hovering reach the game's icons underneath. Remove one by right-clicking its marker (on the world map or minimap) and choosing **Remove Icon** (any other click or key closes that menu), or from the result's menu, or all with the **Clear Markers** button next to the status line, the menu or the Clear Map Markers Hotkey.
+- With the search box empty, the window shows your favourites. Item names are coloured by rarity. Results the API has no icon for (some skills, traits and items, and NPCs and wiki pages without a service icon) get the wiki's game icon where it has one (saved in `tyriasearch/wiki-icons`; icons padded with a large black border, like the generic monster skill one, are cropped to fill their space). The rest get a plain one for their kind (skills and traits: the Strike Damage icon), which is also shown while an icon downloads.
+- In **Everything**, once you pause typing (3 letters or more), it also asks the wiki live and lists the pages it finds below the results here (places, NPCs, objects, items), placed on the map and linked to their nearest waypoint where possible; pages named like a result here are left out. In other categories it asks only when nothing matches. Item pages get the item's chat link. A last result opens the full wiki search in your browser.
+- The **Wiki** category in the dropdown skips the downloaded data and asks the wiki straight away, once you pause typing (3 letters or more). It works even with Search the Wiki off.
 
 NPCs come from the wiki. About half have exact coordinates there; the rest only name their area ("Trader's Forum"), so the marker goes to that area's centre and says *approximate*. Either way, the chat link is the nearest waypoint. NPCs listed only by map, or a region like "Kryta" without coordinates, get no marker or waypoint; clicking them opens their wiki page. An NPC in several places is listed once per place, so searching "bank" lists every banker. NPC names are in English.
 
@@ -82,7 +82,7 @@ Portals are searchable too, under **Portals**: "Portal to Kessex Hills", "Asura 
 
 Data is downloaded from the GW2 API and the wiki the first time, then in full every 30 days (see **Full Download Every (Days)**). After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
 
-- Places, skills and traits: about 1.5 MB per language, under a minute. On a full download, add a minute or two once to look up skill icons the API lacks on the wiki.
+- Places, skills and traits: about 1.5 MB per language, under a minute. On a full download, add a minute or two once to look up skill and trait icons the API lacks on the wiki.
 - NPCs: about 2 MB, a few minutes (the wiki is slower than the API).
 - Events: about 1 MB, under a minute.
 - Items: about 10 MB per language, a few minutes.
@@ -104,14 +104,15 @@ The settings are in their own window, in sections (Search Window, Search Options
 - **Show on the Minimap** (on) – also draws Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of the minimap's range sits at its edge, pointing the way. Names are left off there for lack of room.
 - **Show Portals on the World Map** (off) – marks every portal on the world map with the game's icons: blue zone portals, purple asura gates, and dungeon, raid and fractal entrances, labelled "To <map>" once you zoom in. Covers core Tyria through End of Dragons, from Tekkit's All-In-One marker pack; later maps and the WvW borderlands have none yet.
 - **Learn New Portals** (on) – when you take a portal Tyria Search doesn't know, a panel at the top of the screen (drag it anywhere; it remembers) asks whether to add it, with where it leads (the destination map's name, editable) and its kind (Zone Portal, Asura Gate, Dungeon, Raid or Fractal Entrance). It then asks you to go back through it; the way back is noticed like any other portal and offered as the return portal (or press **Skip**). Each map change that isn't taken as a new portal is logged in the Blish HUD log with the reason. Added portals are saved to `learned-portals.json` in the `tyriasearch` folder, in the bundled list's format. A portal counts when the map changes within a few seconds of moving, with the world map closed, away from any known portal; waypoints, teleport items and joining a squad member are left out.
-- **Search Waypoints**, **Search Points of Interest**, **Search Vistas**, **Search Portals**, **Search Renown Hearts**, **Search Hero Challenges**, **Search Mastery Points**, **Search Adventures**, **Search Skills**, **Search Traits** (all on) – which kinds of result to include. These are downloaded together, so turning one off only leaves it out of the results.
+- **Search Waypoints**, **Search Points of Interest**, **Search Vistas**, **Search Portals**, **Search Renown Hearts**, **Search Hero Challenges**, **Search Mastery Points**, **Search Adventures** (all on) – which kinds of result to include. These come with the map data every result's position needs, so turning one off only leaves it out of the results.
+- **Search Skills**, **Search Traits** (on) – off, they're left out of the results and of later downloads. What was already downloaded is kept and shown again when you turn the option back on, then brought up to date.
 - **Search NPCs** (on) – also downloads English map data if neither search language is English, since NPC places are matched by English name.
 - **Search Events** (on) – like Search NPCs, also downloads English map data if neither search language is English.
 - **Search Items** (on).
-- **Search the Wiki When Nothing Matches** (on) – off: offer to open a wiki search in your browser instead.
+- **Search the Wiki** (on) – in Everything, also ask the wiki once you pause typing and list its pages below the results here; in other categories, ask it when nothing matches. Off: offer to open a wiki search in your browser instead. The Wiki category always asks it.
 - **Restore Clipboard** (on) – put back what you had copied after Paste into Chat or Whisper to Yourself.
 - **Key Press Delay** (60 ms, 20–250) – raise it if pasted or whispered text is sometimes typed wrong.
 - **Left-Click a Result** (Copy Chat Link) and **Right-Click a Result** (Show Menu) – also Paste into Chat, Whisper to Yourself, Show on Map, Open Wiki Page, Copy Wiki Command or Toggle Favourite. If the result has no chat link or map position, its wiki page opens instead.
-- **Update Data** button – downloads all search data again now (NPCs, events and items only when they're on).
+- **Update Data** button – downloads all search data again now (skills, traits, NPCs, events and items only when they're on).
 - **Learned Portals** list (in the Portals section) – every learned portal, with where it leads and its kind to edit (saved on Enter, or when you pick a kind) and a **Delete** button.
 - **Forget Learned Portals** button – removes every portal Learn New Portals added.

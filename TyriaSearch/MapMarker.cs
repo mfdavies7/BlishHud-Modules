@@ -4,6 +4,7 @@ using System.Linq;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
+using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -11,18 +12,34 @@ namespace TyriaSearch
 {
     /// <summary>
     /// Marks search results on the world map while the map is open, and on the minimap (compass) while it's closed
-    /// if <see cref="ShowOnMinimap"/> is on. Covers the whole screen but never takes clicks.
+    /// if <see cref="ShowOnMinimap"/> is on. Covers the whole screen but never takes input: clicks and hovering reach
+    /// the game's own map icons underneath. Right-clicking a marker opens a small menu to remove it
+    /// (<see cref="RemoveRequested"/>).
     /// </summary>
     internal sealed class MapMarker : Control
     {
         private const int IconSize = 32;
         private const int EdgeMargin = 24;
+        private const int HitMargin = 4;
 
         private readonly Func<int, int> _continentOf;
         private readonly Func<SearchEntry, AsyncTexture2D> _iconFor;
         private readonly Func<SearchEntry, Texture2D> _placeholderFor;
 
         public List<SearchItem> Targets { get; } = new List<SearchItem>();
+
+        /// <summary>Remove Icon was chosen in a marker's right-click menu.</summary>
+        public event Action<SearchItem> RemoveRequested;
+
+        // Where each marker was last drawn, in drawing order, and when; hit areas follow them.
+        private readonly List<(Rectangle area, SearchItem target)> _drawn = new List<(Rectangle, SearchItem)>();
+        private DateTime _paintedUtc;
+        // Not drawn for this long (Blish HUD hidden, or loading): the hit areas go too.
+        private static readonly TimeSpan PaintTimeout = TimeSpan.FromMilliseconds(250);
+        private readonly List<HitArea> _hitAreas = new List<HitArea>();
+
+        private readonly ContextMenuStrip _menu;
+        private SearchItem _menuTarget;
 
         /// <summary>Portals to draw on the world map.</summary>
         public IReadOnlyList<Portal> Portals = Array.Empty<Portal>();
@@ -60,15 +77,112 @@ namespace TyriaSearch
             _continentOf = continentOf;
             _iconFor = iconFor;
             _placeholderFor = placeholderFor;
+
+            _menu = new ContextMenuStrip();
+            var remove = _menu.AddMenuItem("Remove Icon");
+            remove.BasicTooltipText = "Remove this marker from the map.";
+            remove.Click += (_, __) =>
+            {
+                var target = _menuTarget;
+                CloseMenu();
+                if (target != null && Targets.Contains(target)) RemoveRequested?.Invoke(target);
+            };
+
+            // Any other input closes the menu.
+            GameService.Input.Mouse.LeftMouseButtonPressed += Mouse_ButtonPressed;
+            GameService.Input.Mouse.RightMouseButtonPressed += Mouse_ButtonPressed;
+            GameService.Input.Mouse.MouseWheelScrolled += Mouse_MouseWheelScrolled;
+            GameService.Input.Keyboard.KeyPressed += Keyboard_KeyPressed;
         }
 
         protected override CaptureType CapturesInput() => CaptureType.None;
 
+        private void ShowMenu(SearchItem target)
+        {
+            _menuTarget = target;
+            _menu.Show(GameService.Input.Mouse.Position); // its top left corner at the cursor, so it opens under it
+        }
+
+        private void CloseMenu()
+        {
+            _menuTarget = null;
+            if (_menu.Visible) _menu.Hide();
+        }
+
+        private void Mouse_ButtonPressed(object sender, MouseEventArgs e)
+        {
+            if (_menu.Visible && !_menu.AbsoluteBounds.Contains(GameService.Input.Mouse.Position)) CloseMenu();
+        }
+
+        private void Mouse_MouseWheelScrolled(object sender, MouseEventArgs e) => CloseMenu();
+        private void Keyboard_KeyPressed(object sender, KeyboardEventArgs e) => CloseMenu();
+
+        /// <summary>Keeps a hit area over each marker drawn last frame, and closes the menu once its marker is gone.</summary>
+        public override void DoUpdate(GameTime gameTime)
+        {
+            base.DoUpdate(gameTime);
+            bool painted = Visible && DateTime.UtcNow - _paintedUtc < PaintTimeout;
+            int count = painted ? _drawn.Count : 0;
+            while (_hitAreas.Count < count) _hitAreas.Add(new HitArea(ShowMenu) { Parent = Parent, Visible = false });
+            for (int i = 0; i < _hitAreas.Count; i++)
+            {
+                var hit = _hitAreas[i];
+                if (i < count)
+                {
+                    // Drawn later, on top: a higher z-index, so overlapping markers get the one you can see.
+                    (hit.Target, hit.Location, hit.Size, hit.ZIndex) = (_drawn[i].target, _drawn[i].area.Location, _drawn[i].area.Size, ZIndex + 1 + i);
+                    hit.Visible = true;
+                }
+                else if (hit.Visible)
+                {
+                    hit.Visible = false;
+                    hit.Target = null;
+                }
+            }
+            if (_menu.Visible && (_menuTarget == null || !_drawn.Any(d => d.target == _menuTarget) || !painted)) CloseMenu();
+        }
+
+        protected override void DisposeControl()
+        {
+            GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_ButtonPressed;
+            GameService.Input.Mouse.RightMouseButtonPressed -= Mouse_ButtonPressed;
+            GameService.Input.Mouse.MouseWheelScrolled -= Mouse_MouseWheelScrolled;
+            GameService.Input.Keyboard.KeyPressed -= Keyboard_KeyPressed;
+            foreach (var hit in _hitAreas) hit.Dispose();
+            _menu.Dispose();
+            base.DisposeControl();
+        }
+
+        /// <summary>
+        /// An invisible control over one marker that notices right-clicks without blocking anything: the game still gets
+        /// every click, and hovering, so its own icons underneath work as usual.
+        /// </summary>
+        private sealed class HitArea : Control
+        {
+            private readonly Action<SearchItem> _rightClicked;
+            public SearchItem Target;
+
+            public HitArea(Action<SearchItem> rightClicked) => _rightClicked = rightClicked;
+
+            protected override CaptureType CapturesInput() => CaptureType.DoNotBlock;
+
+            // On release, once the press has closed any menu already open.
+            protected override void OnRightMouseButtonReleased(MouseEventArgs e)
+            {
+                base.OnRightMouseButtonReleased(e);
+                if (Target != null) _rightClicked(Target);
+            }
+
+            protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds) { }
+        }
+
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
+            _drawn.Clear();
+            _paintedUtc = DateTime.UtcNow;
             var ui = GameService.Gw2Mumble.UI;
             if (ui.MapScale <= 0) return;
-            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier;
+            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier / GameDpiScale();
             View view;
             if (ui.IsMapOpen)
                 view = new View { Bounds = new Rectangle(0, 0, Width, Height), UnitsPerUiPixel = unitsPerUiPixel, EdgeMargin = EdgeMargin, IconScale = CloseZoomScale(ui.MapScale) };
@@ -86,7 +200,7 @@ namespace TyriaSearch
             if (view.Bounds.Width <= 0 || view.Bounds.Height <= 0) return;
 
             if (ShowPortals) PaintPortals(spriteBatch, view);
-            foreach (var target in Targets) PaintMarker(spriteBatch, target.Entry, view);
+            foreach (var target in Targets) PaintMarker(spriteBatch, target, view);
         }
 
         // The game draws its map icons bigger over the closest few zoom levels. Measured against its world map waypoints
@@ -104,15 +218,44 @@ namespace TyriaSearch
             return 1 + (CloseZoomGrowth - 1) * MathHelper.Clamp((float)t, 0, 1);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr window);
+
+        private static float _dpiScale = 1;
+        private static DateTime _dpiCheckedUtc;
+
         /// <summary>
-        /// The compass in UI units. Mumble gives its size in screen pixels; it sits at the right edge, either at the
-        /// top or just above the bottom.
+        /// With the game's DPI Scaling option on, it draws the map and compass bigger by the monitor's scale (Windows
+        /// display scaling), but Mumble's map scale and compass size don't include it. 1 with the option off.
+        /// Checked once a second, since the game window can move to another monitor.
+        /// </summary>
+        private static float GameDpiScale()
+        {
+            if (DateTime.UtcNow - _dpiCheckedUtc < TimeSpan.FromSeconds(1)) return _dpiScale;
+            _dpiCheckedUtc = DateTime.UtcNow;
+            float scale = 1;
+            try
+            {
+                var window = GameService.GameIntegration.Gw2Instance.Gw2WindowHandle;
+                if (GameService.GameIntegration.GfxSettings.DpiScaling == true && window != IntPtr.Zero)
+                {
+                    uint dpi = GetDpiForWindow(window);
+                    if (dpi > 0) scale = dpi / 96f;
+                }
+            }
+            catch (Exception) { } // GetDpiForWindow needs Windows 10 1607 or later
+            return _dpiScale = scale;
+        }
+
+        /// <summary>
+        /// The compass in UI units. Mumble gives its size in screen pixels before DPI scaling; it sits at the right edge,
+        /// either at the top or just above the bottom.
         /// </summary>
         private static Rectangle MinimapBounds()
         {
             var ui = GameService.Gw2Mumble.UI;
             var screen = GameService.Graphics.SpriteScreen;
-            float scale = GameService.Graphics.UIScaleMultiplier;
+            float scale = GameService.Graphics.UIScaleMultiplier / GameDpiScale();
             int width = (int)(ui.CompassSize.Width / scale);
             int height = (int)(ui.CompassSize.Height / scale);
             int y = ui.IsCompassTopRight ? 0 : screen.Height - height - (int)(MinimapBottomGap / scale);
@@ -155,8 +298,9 @@ namespace TyriaSearch
             return new Vector2(view.Bounds.Center.X, view.Bounds.Center.Y) + offset;
         }
 
-        private void PaintMarker(SpriteBatch spriteBatch, SearchEntry entry, View view)
+        private void PaintMarker(SpriteBatch spriteBatch, SearchItem target, View view)
         {
+            var entry = target.Entry;
             if (entry.X == null || entry.Y == null) return;
             // The map shows the continent the player is on.
             if (_continentOf(entry.MapId) != _continentOf(GameService.Gw2Mumble.CurrentMap.Id)) return;
@@ -179,7 +323,10 @@ namespace TyriaSearch
             if (icon == null || !icon.HasTexture) icon = _placeholderFor(entry) ?? GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
 
             var iconRect = new Rectangle((int)pinned.X - size / 2, (int)pinned.Y - size / 2, size, size);
-            spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, Inflate(iconRect, view.Minimap ? 2 : 4), Color.Black * 0.5f);
+            var backing = Inflate(iconRect, view.Minimap ? 2 : 4);
+            // A little bigger than the marker, which pulses, so a right-click near its edge still counts.
+            _drawn.Add((Inflate(backing, HitMargin), target));
+            spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, backing, Color.Black * 0.5f);
             if (icon.HasTexture) spriteBatch.DrawOnCtrl(this, icon, iconRect, Color.White * (offScreen ? 0.8f : 1f));
             if (view.Minimap) return; // no room for names on the minimap
 

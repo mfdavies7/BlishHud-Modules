@@ -20,6 +20,7 @@ namespace TyriaSearch
         private const int MaxResults = 100;
         private const int SearchDelayMs = 150; // wait for a pause in typing before searching
         private const int WikiSearchDelayMs = 700; // longer for the Wiki category, so typing doesn't ask the wiki for every word
+        private const string EverythingCategory = "Everything";
         private const string WikiCategory = "Wiki";
         private const string FavouritesCategory = "Favourites";
         private const int MessageSeconds = 4;
@@ -44,6 +45,7 @@ namespace TyriaSearch
             public bool Live;     // from the live wiki search
             public bool Failed;   // the live wiki search couldn't reach the wiki
             public bool WikiOnly; // the Wiki category: ask the wiki without searching here first
+            public bool Appended; // Everything: live wiki results to list below the ones already shown
         }
 
         private const int MinLiveQueryLength = 3; // shorter queries match too much of the wiki to be useful
@@ -71,12 +73,17 @@ namespace TyriaSearch
         private volatile Results _pending;
         private bool _enterQueued; // Enter pressed before the results for the latest text arrived
 
+        // Everything also asks the wiki, once typing pauses for as long as the Wiki category waits.
+        private DateTime? _wikiDue;
+        private Results _wikiFor; // the results shown, which the wiki's are added to
+        private ResultRow _wikiRow; // "Searching the wiki" below them
+
         public SearchWindow(TyriaSearchModule module, Texture2D emblem)
         {
             _module = module;
             _categories = new (string, Func<SearchItem, bool>)[]
             {
-                ("Everything", _ => true),
+                (EverythingCategory, _ => true), // also asks the wiki, see ShowResults
                 ("Waypoints", i => i.Entry.Kind == EntryKind.Waypoint),
                 ("Points of Interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
                 ("Vistas", i => i.Entry.Kind == EntryKind.Vista),
@@ -197,6 +204,12 @@ namespace TyriaSearch
                 ShowResults(pending);
             }
 
+            if (_wikiDue.HasValue && DateTime.UtcNow >= _wikiDue.Value)
+            {
+                _wikiDue = null;
+                if (_wikiFor.Version == _searchVersion) AskWiki(_wikiFor.Version, _wikiFor.Query.Trim(), wikiOnly: false, appended: true);
+            }
+
             int markers = _module.MapMarkerCount;
             _clearMarkers.Visible = markers > 0;
             _clearMarkers.Text = markers == 1 ? "Clear Map Marker" : $"Clear {markers} Markers";
@@ -237,6 +250,7 @@ namespace TyriaSearch
         public void RunSearch()
         {
             _searchDue = null;
+            _wikiDue = null;
             var index = _shownIndex = _module.Index;
             string query = _query.Text ?? "";
             var filter = _categories.First(c => c.label == _category.SelectedItem).filter;
@@ -268,31 +282,21 @@ namespace TyriaSearch
 
         private void ShowResults(Results results)
         {
+            int rowWidth = _results.ContentRegion.Width - 20; // room for the scrollbar
+            string query = results.Query.Trim();
+            if (results.Appended)
+            {
+                AppendWikiResults(results, query, rowWidth);
+                return;
+            }
+
             _shownVersion = results.Version;
             _shownResults = results.Items;
             foreach (var child in _results.Children.ToList()) child.Dispose();
-
-            int rowWidth = _results.ContentRegion.Width - 20; // room for the scrollbar
-            foreach (var item in _shownResults)
-            {
-                var entry = item.Entry;
-                var row = new ResultRow(item)
-                {
-                    Parent = _results,
-                    Width = rowWidth,
-                    Title = entry.Name,
-                    Subtitle = Describe(item),
-                    Icon = _module.IconFor(entry),
-                    PlaceholderIcon = _module.BundledIconFor(entry),
-                    TitleColor = entry.Rarity != null && RarityColors.TryGetValue(entry.Rarity, out var color) ? color : Color.White,
-                    BasicTooltipText = Tooltip(item),
-                };
-                row.Click += Row_Click;
-                row.RightMouseButtonReleased += Row_RightMouseButtonReleased;
-            }
+            _wikiRow = null;
+            foreach (var item in _shownResults) AddRow(item, rowWidth);
 
             // Nothing found locally: ask the wiki, which knows places, NPCs and objects the downloaded data doesn't.
-            string query = results.Query.Trim();
             bool askingWiki = false;
             if (results.Live)
             {
@@ -304,7 +308,7 @@ namespace TyriaSearch
             }
             else if (_shownResults.Count == 0 && query.Length > 0)
             {
-                // The Wiki category asks even with Search the Wiki When Nothing Matches off: the player chose it.
+                // The Wiki category asks even with Search the Wiki off: the player chose it.
                 askingWiki = (results.WikiOnly || _module.SearchWiki) && query.Length >= MinLiveQueryLength && _category.SelectedItem != FavouritesCategory;
                 if (askingWiki)
                 {
@@ -315,7 +319,7 @@ namespace TyriaSearch
                         Title = $"Searching the wiki for \"{query}\"…",
                         Subtitle = results.WikiOnly ? "Asking the wiki." : "Nothing here matched.",
                     };
-                    AskWiki(results.Version, query, results.WikiOnly);
+                    AskWiki(results.Version, query, results.WikiOnly, appended: false);
                 }
                 else
                 {
@@ -324,8 +328,58 @@ namespace TyriaSearch
                         : "No results here. Opens the wiki in your browser.");
                 }
             }
+            // Everything: the wiki's pages go below what was found here, once typing pauses. Not for a pasted chat code.
+            else if (_shownResults.Count > 0 && _category.SelectedItem == EverythingCategory && _module.SearchWiki
+                     && query.Length >= MinLiveQueryLength && !query.StartsWith("[&"))
+            {
+                _wikiRow = new ResultRow(null)
+                {
+                    Parent = _results,
+                    Width = rowWidth,
+                    Title = $"Searching the wiki for \"{query}\"…",
+                    Subtitle = "Asked once you pause typing; its pages are listed here.",
+                };
+                _wikiFor = results;
+                _wikiDue = DateTime.UtcNow.AddMilliseconds(WikiSearchDelayMs - SearchDelayMs);
+            }
 
             if (_enterQueued && !askingWiki) CopyTopResult();
+        }
+
+        private void AddRow(SearchItem item, int width)
+        {
+            var entry = item.Entry;
+            var row = new ResultRow(item)
+            {
+                Parent = _results,
+                Width = width,
+                Title = entry.Name,
+                Subtitle = Describe(item),
+                Icon = _module.IconFor(entry),
+                PlaceholderIcon = _module.BundledIconFor(entry),
+                TitleColor = entry.Rarity != null && RarityColors.TryGetValue(entry.Rarity, out var color) ? color : Color.White,
+                BasicTooltipText = Tooltip(item),
+            };
+            row.Click += Row_Click;
+            row.RightMouseButtonReleased += Row_RightMouseButtonReleased;
+        }
+
+        /// <summary>
+        /// Lists the wiki's pages below the results already shown, which stay as they are (and scrolled where they were).
+        /// Pages named like a result here are left out.
+        /// </summary>
+        private void AppendWikiResults(Results results, string query, int rowWidth)
+        {
+            _wikiRow?.Dispose();
+            _wikiRow = null;
+            var names = new HashSet<string>(_shownResults.SelectMany(i => new[] { i.Entry.Name, i.Alternate?.Name }).Where(n => n != null),
+                StringComparer.OrdinalIgnoreCase);
+            var added = results.Items.Where(i => !names.Contains(i.Entry.Name)).ToList();
+            _shownResults = _shownResults.Concat(added).ToList();
+            foreach (var item in added) AddRow(item, rowWidth);
+            AddBrowserRow(query, rowWidth, results.Failed ? "Couldn't reach the wiki just now. Opens it in your browser instead."
+                : added.Count > 0 ? "More results in your browser."
+                : "Nothing more on the wiki. Opens a full wiki search in your browser.");
         }
 
         private void AddBrowserRow(string query, int width, string subtitle)
@@ -334,7 +388,8 @@ namespace TyriaSearch
             row.Click += (_, __) => _module.OpenWikiSearch(query);
         }
 
-        private void AskWiki(int version, string query, bool wikiOnly)
+        /// <param name="appended">Everything: the pages go below the results already shown instead of replacing them.</param>
+        private void AskWiki(int version, string query, bool wikiOnly, bool appended)
         {
             _module.SearchWikiLiveAsync(query).ContinueWith(t =>
             {
@@ -342,7 +397,8 @@ namespace TyriaSearch
                 // Shown only if nothing was typed since (same version).
                 _pending = new Results
                 {
-                    Version = version, Query = query, Items = ok ? t.Result : new List<SearchItem>(), Live = true, Failed = !ok, WikiOnly = wikiOnly,
+                    Version = version, Query = query, Items = ok ? t.Result : new List<SearchItem>(), Live = true, Failed = !ok,
+                    WikiOnly = wikiOnly, Appended = appended,
                 };
             });
         }

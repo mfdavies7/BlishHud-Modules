@@ -104,7 +104,7 @@ namespace TyriaSearch
             {
                 var services = npc.Services ?? new List<string>();
                 string serviceText = string.Join(" · ", services.Select(s => ServiceNames.TryGetValue(s, out var alias) ? alias : s));
-                string icon = ServiceIcon(services, npcs.Icons);
+                string icon = ServiceIcon(services, npcs.Icons) ?? npc.Icon;
 
                 var coordinates = npc.Coordinates ?? new List<float[]>();
                 var used = new bool[coordinates.Count];
@@ -234,7 +234,7 @@ namespace TyriaSearch
         /// <summary>
         /// A page from a live wiki search. Placed by its exact coordinates, else as a place itself (location pages),
         /// else by where the page says it is. Items with a game id get their real chat link.
-        /// The icon is the downloaded item, skill or trait's, else from the page's services or type.
+        /// The icon is the downloaded item, skill or trait's, else the page's own game icon, else from its services or type.
         /// </summary>
         /// <param name="icons">/v2/files ids to icon URLs; null when NPCs aren't downloaded.</param>
         public static SearchEntry FromPage(Gw2Data.WikiPage page, Places places, SearchIndex index, Dictionary<string, string> icons)
@@ -267,7 +267,9 @@ namespace TyriaSearch
                 "Trait" => new TraitChatLink { TraitId = page.GameId.Value }.ToString(),
                 _ => null,
             };
-            entry.Icon = (gameLink != null ? index.Find(gameLink)?.Entry.Icon : null)
+            string gameIcon = gameLink != null ? index.Find(gameLink)?.Entry.Icon : null;
+            entry.Icon = (Gw2Data.IsMissingIcon(gameIcon) ? null : gameIcon)
+                         ?? page.Icon
                          ?? ServiceIcon(page.Services, icons)
                          ?? FileIcon(PageIcons.TryGetValue(page.LocationType ?? page.Context ?? "", out var id) ? id : null, icons)
                          ?? SearchEntry.BundledIcon + page.Context switch
