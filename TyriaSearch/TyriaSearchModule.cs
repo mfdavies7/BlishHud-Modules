@@ -18,6 +18,7 @@ using Microsoft.Xna.Framework.Graphics;
 using ModuleShared;
 using Blish_HUD.Controls.Extern;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
+using Mouse = Blish_HUD.Controls.Intern.Mouse;
 
 namespace TyriaSearch
 {
@@ -39,6 +40,7 @@ namespace TyriaSearch
         private SettingEntry<KeyBinding> _openKey;
         private SettingEntry<KeyBinding> _clearMarkerKey;
         private SettingEntry<bool> _openMapOnShow;
+        private SettingEntry<bool> _zoomOutMap;
         private SettingEntry<bool> _showPortals;
         private SettingEntry<bool> _showOnMinimap;
         private SettingEntry<bool> _learnPortals;
@@ -92,6 +94,9 @@ namespace TyriaSearch
         private volatile bool _downloading;
 
         private readonly CancellationTokenSource _unloading = new CancellationTokenSource();
+        // Wiki icons by URL, loaded on first use (UI thread only), and saved under wiki-icons so each is downloaded once.
+        private readonly Dictionary<string, AsyncTexture2D> _wikiIcons = new Dictionary<string, AsyncTexture2D>();
+        private string _wikiIconDirectory;
         private CancellationTokenSource _refreshCancel;
         private Task _refreshTask = Task.CompletedTask;
         private bool _refreshForced; // the latest refresh downloads everything
@@ -128,6 +133,9 @@ namespace TyriaSearch
             _openMapOnShow = settings.DefineSetting("OpenMapOnShow", true,
                 () => "Open Map After Show on Map",
                 () => "After Show on Map, open the world map if it isn't already open, by pressing Game's Map Key below. Chat must be closed.");
+            _zoomOutMap = settings.DefineSetting("ZoomOutMapOnShow", true,
+                () => "Zoom Out Map After Opening",
+                () => "When Open Map After Show on Map opens the world map, zoom it all the way out so the marker is on screen. Scrolls the mouse wheel, so keep the cursor over the game.");
             _showPortals = settings.DefineSetting("ShowPortals", false,
                 () => "Show Portals on the World Map",
                 () => "Marks every portal on the world map with the game's icons: zone portals, asura gates, dungeon, raid and fractal entrances. Each is labelled with where it leads once you zoom in.");
@@ -213,7 +221,7 @@ namespace TyriaSearch
                 }),
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
                 ("Update Data", "Download all search data again now: places, skills and traits, plus NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
-            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _gameMapKey, _showOnMinimap }),
+            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _zoomOutMap, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
@@ -241,11 +249,12 @@ namespace TyriaSearch
 
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
             _data = new Gw2Data(directory);
+            _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
-            foreach (string name in new[] { "npc", "item", "skill", "location", "page" })
+            foreach (string name in new[] { "npc", "item", "skill", "location", "page" }.Concat(Gw2Data.BundledIconNames))
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
-            _mapMarker = new MapMarker(ContinentOf, IconFor) { Parent = GameService.Graphics.SpriteScreen };
+            _mapMarker = new MapMarker(ContinentOf, IconFor, BundledIconFor) { Parent = GameService.Graphics.SpriteScreen };
             using (var portals = ModuleParameters.ContentsManager.GetFileStream("portals.json"))
                 _bundledPortals = Portal.Load(portals);
             _portalLearner = new PortalLearner(directory);
@@ -384,6 +393,7 @@ namespace TyriaSearch
             _window?.Dispose();
             _icon?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
+            foreach (var texture in _wikiIcons.Values) texture.Texture?.Dispose();
             _data?.Dispose();
         }
 
@@ -432,9 +442,54 @@ namespace TyriaSearch
             string icon = entry.Icon;
             if (icon?.StartsWith(SearchEntry.AssetIcon) == true && int.TryParse(icon.Substring(SearchEntry.AssetIcon.Length), out int assetId))
                 return AsyncTexture2D.FromAssetId(assetId);
-            bool bundled = icon?.StartsWith(SearchEntry.BundledIcon) == true;
-            if (!string.IsNullOrEmpty(icon) && !bundled) return GameService.Content.GetRenderServiceTexture(icon);
-            string name = bundled ? icon.Substring(SearchEntry.BundledIcon.Length) : entry.Kind switch
+            if (icon?.StartsWith(Gw2Data.WikiImages) == true) return WikiIcon(icon);
+            // Skills the wiki has no icon for either keep the API's missing icon.
+            if (!Gw2Data.IsMissingIcon(icon) && !icon.StartsWith(SearchEntry.BundledIcon))
+                return GameService.Content.GetRenderServiceTexture(icon);
+            return BundledIconFor(entry);
+        }
+
+        /// <summary>An icon from the wiki: empty until it has loaded from disk or downloaded, and stays empty if that fails.</summary>
+        private AsyncTexture2D WikiIcon(string url)
+        {
+            if (_wikiIcons.TryGetValue(url, out var texture)) return texture;
+            texture = _wikiIcons[url] = new AsyncTexture2D();
+            _ = LoadWikiIconAsync(url, texture);
+            return texture;
+        }
+
+        private async Task LoadWikiIconAsync(string url, AsyncTexture2D texture)
+        {
+            string file;
+            using (var sha = System.Security.Cryptography.SHA1.Create())
+                file = System.IO.Path.Combine(_wikiIconDirectory,
+                    string.Concat(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url)).Select(b => b.ToString("x2"))) + ".png");
+            try
+            {
+                byte[] bytes;
+                if (System.IO.File.Exists(file)) bytes = System.IO.File.ReadAllBytes(file);
+                else
+                {
+                    bytes = await _data.GetBytesAsync(url, _unloading.Token);
+                    System.IO.Directory.CreateDirectory(_wikiIconDirectory);
+                    System.IO.File.WriteAllBytes(file, bytes);
+                }
+                if (_unloading.IsCancellationRequested) return;
+                using (var stream = new System.IO.MemoryStream(bytes))
+                using (var context = GameService.Graphics.LendGraphicsDeviceContext())
+                    texture.SwapTexture(TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream));
+            }
+            catch (Exception ex) when (!(ex is OperationCanceledException))
+            {
+                Logger.Debug(ex, $"Couldn't load the wiki icon {url}.");
+            }
+        }
+
+        /// <summary>The result's bundled icon, else its kind's; also shown while its own icon downloads.</summary>
+        internal Texture2D BundledIconFor(SearchEntry entry)
+        {
+            string icon = entry.Icon;
+            string name = icon?.StartsWith(SearchEntry.BundledIcon) == true ? icon.Substring(SearchEntry.BundledIcon.Length) : entry.Kind switch
             {
                 EntryKind.Npc => "npc",
                 EntryKind.Item => "item",
@@ -531,14 +586,14 @@ namespace TyriaSearch
                     var saved = data.MainFor(language);
                     if (force || IsStale(saved?.DownloadedUtc, saved?.GameBuild ?? 0, build))
                         await Download($"{LanguageName(language)} places, skills and traits",
-                            async progress => data.Main[language] = await _data.DownloadMainAsync(language, build, await Fingerprint(), progress, ct));
+                            async progress => data.Main[language] = await _data.DownloadMainAsync(language, build, await Fingerprint(), null, progress, ct));
                     else if (IsOlderBuild(saved.GameBuild, build))
                         await Download($"{LanguageName(language)} places, skills and traits", async progress =>
                         {
                             progress.Report("checking for changes…");
                             string current = await Fingerprint();
                             if (current == saved.Fingerprint) _data.ConfirmMain(saved, build);
-                            else data.Main[language] = await _data.DownloadMainAsync(language, build, current, progress, ct);
+                            else data.Main[language] = await _data.DownloadMainAsync(language, build, current, saved, progress, ct);
                         });
                 }
 
@@ -849,11 +904,69 @@ namespace TyriaSearch
                     // Never leave a simulated modifier held down system-wide.
                     foreach (var key in modifiers) Keyboard.Release(key, true);
                 }
+                if (_zoomOutMap.Value) await ZoomMapOutAsync();
             }
             catch (AbortException ex)
             {
                 ScreenNotification.ShowNotification($"Tyria Search couldn't open the map: {ex.Message}", ScreenNotification.NotificationType.Warning);
             }
+        }
+
+        // Fully zoomed in to fully out took 11 notches in testing; more at the widest zoom do nothing.
+        private const int MaxZoomOutSteps = 15;
+        // Notches sent one at a time, each waiting for the map to start zooming, before the rest are sent regardless:
+        // the map may still be opening and miss the first.
+        private const int MaxUnansweredSteps = 2;
+        private const int AnswerTimeoutMs = 200;
+        // Once the map takes the wheel, the rest are sent about a game frame apart, like a quick flick of the wheel.
+        private const int FastStepMs = 20;
+        // Blish HUD's Mouse.RotateWheel takes the distance modulo a notch (120), so a whole notch would send nothing:
+        // this is the most it can send.
+        private const int WheelStep = 119;
+
+        /// <summary>
+        /// Zooms the just-opened map all the way out, so the marker is on screen wherever it is. Sends a notch at a
+        /// time until the map starts zooming, then the rest in a quick burst.
+        /// </summary>
+        private static async Task ZoomMapOutAsync()
+        {
+            var ui = GameService.Gw2Mumble.UI;
+            if (!await ChatInput.WaitAsync(() => ui.IsMapOpen, 2000)) return;
+            double startScale = await SettledMapScaleAsync();
+
+            bool answered = false;
+            for (int step = 1; step <= MaxZoomOutSteps; step++)
+            {
+                if (!ui.IsMapOpen) return; // the player closed it
+                ChatInput.EnsureSafe(chatOpen: false);
+                // Blish HUD only works out which of its controls is under the cursor when the mouse moves, so after the
+                // click that started this it still has the hidden result row or menu item, and its mouse hook keeps the
+                // wheel from the game. Forget it; the next mouse move works it out again.
+                GameService.Input.Mouse.UnsetActiveControl();
+                // Negative, towards the player: zoom out. Sent as real input; the game ignores wheel messages posted to it.
+                Mouse.RotateWheel(-WheelStep, false, -1, -1, true);
+
+                if (answered || step > MaxUnansweredSteps) await Task.Delay(FastStepMs);
+                else answered = await ChatInput.WaitAsync(() => ui.MapScale > startScale * 1.01, AnswerTimeoutMs);
+            }
+        }
+
+        /// <summary>
+        /// The map's scale once the game reports it: right as the map opens, Mumble can still have the minimap's.
+        /// Waits until it's the same for a few readings in a row, or half a second at most.
+        /// </summary>
+        private static async Task<double> SettledMapScaleAsync()
+        {
+            var ui = GameService.Gw2Mumble.UI;
+            double scale = ui.MapScale;
+            int same = 0;
+            for (int waited = 0; waited < 500 && same < 3; waited += 20)
+            {
+                await Task.Delay(20);
+                same = ui.MapScale == scale ? same + 1 : 0;
+                scale = ui.MapScale;
+            }
+            return scale;
         }
 
         internal void ClearMapMarker()

@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Blish_HUD;
 using Gw2Sharp.ChatLinks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -21,12 +22,15 @@ namespace TyriaSearch
     /// </summary>
     public sealed class Gw2Data : IDisposable
     {
+        private static readonly Logger Logger = Logger.GetLogger<Gw2Data>();
         private const string Api = "https://api.guildwars2.com/v2/";
         private const string WikiApi = "https://wiki.guildwars2.com/api.php";
         private const int CacheVersion = 3;
         // The places file has its own version, so adding to it doesn't download items and NPCs again too.
         // 4: renown hearts, hero challenges, mastery points and adventures.
-        private const int MainCacheVersion = 4;
+        // 5: bundled mastery point icons; nearest waypoints for activities on maps that share another map's waypoints.
+        // 6: wiki icons for skills the API has none for.
+        private const int MainCacheVersion = 6;
         private const int WikiAskLimit = 5000; // the ask API stops paging around offset 5,500
         private const int MaxAttempts = 5;
         private const int ItemPageSize = 200; // the API's maximum
@@ -47,18 +51,37 @@ namespace TyriaSearch
         // The wiki's "Event cog (map icon)"; /v2/files has no event icon.
         public const string EventIcon = "https://render.guildwars2.com/file/9F7E0DB4681D22F7927B11B87593386FD77BFABE/102390.png";
 
-        // Mastery point icons by the API's mastery region, as game asset ids (from the wiki's "Mastery point (…)" files).
-        private static readonly Dictionary<string, int> MasteryIcons = new Dictionary<string, int>
+        // Mastery point icons by the API's mastery region, shipped with the module as ref/textures/icon-<name>.png (the
+        // wiki's "Mastery point (…)" files). Blish HUD can't load most of them by asset id, and /v2/files has none.
+        private static readonly Dictionary<string, string> MasteryIcons = new Dictionary<string, string>
         {
-            ["Tyria"] = 962101,
-            ["Maguuma"] = 962063,
-            ["Desert"] = 1770234,
-            ["Tundra"] = 2221470,
-            ["Jade"] = 2604760,
-            ["Sky"] = 3124914,
-            ["Wild"] = 3379046,
-            ["Magic"] = 3713114,
+            ["Tyria"] = "mastery-tyria",
+            ["Maguuma"] = "mastery-maguuma",
+            ["Desert"] = "mastery-desert",
+            ["Tundra"] = "mastery-tundra",
+            ["Jade"] = "mastery-jade",
+            ["Sky"] = "mastery-sky",
+            ["Wild"] = "mastery-wild",
+            ["Magic"] = "mastery-magic",
         };
+
+        // The API's "missing icon" image, which about 1,600 skills (mostly NPC and monster skills, but also some players',
+        // such as the ranger's Quake) point to: an unrelated mask, padded to 128x128 so it looks small.
+        private const string MissingIconFile = "/62248.png";
+
+        public static bool IsMissingIcon(string icon) => string.IsNullOrEmpty(icon) || icon.EndsWith(MissingIconFile, StringComparison.Ordinal);
+
+        /// <summary>Where the wiki serves its uploaded files; <see cref="WikiFileUrl"/> builds the rest.</summary>
+        public const string WikiImages = "https://wiki.guildwars2.com/images/";
+        // Skill ids per ask query: the wiki refuses queries with more than about a dozen conditions.
+        private const int WikiIconBatch = 10;
+        // Skill ids the wiki was asked about, to their icon or null; shared by both languages, and seeded from saved data,
+        // so after the first download only new skills are looked up.
+        private readonly Dictionary<int, string> _wikiSkillIcons = new Dictionary<int, string>();
+        private DateTime _wikiSkillIconsClearedUtc = DateTime.MinValue;
+
+        /// <summary>Names of the bundled icons that downloaded entries refer to.</summary>
+        public static IEnumerable<string> BundledIconNames => MasteryIcons.Values;
 
         // The wiki's ask API stops paging at offset 5,500, so NPCs are fetched in groups by the first letter of their page.
         // Other first characters (punctuation, accented capitals) are looked up in the page list at download time.
@@ -247,12 +270,23 @@ namespace TyriaSearch
             Save(MainPath(cache.Language), cache);
         }
 
-        public async Task<CacheFile> DownloadMainAsync(string language, int gameBuild, string fingerprint, IProgress<string> progress, CancellationToken ct)
+        /// <param name="previous">Saved data being updated, whose wiki icon lookups are kept; null to look them all up again.</param>
+        public async Task<CacheFile> DownloadMainAsync(string language, int gameBuild, string fingerprint, CacheFile previous, IProgress<string> progress, CancellationToken ct)
         {
+            if (previous != null) RememberWikiSkillIcons(previous);
+            else lock (_wikiSkillIcons)
+            {
+                // A full download looks the icons up again, but once for all languages, not once each.
+                if (DateTime.UtcNow - _wikiSkillIconsClearedUtc > TimeSpan.FromHours(1))
+                {
+                    _wikiSkillIcons.Clear();
+                    _wikiSkillIconsClearedUtc = DateTime.UtcNow;
+                }
+            }
             var places = new List<Place>();
             var entries = await DownloadLandmarksAsync(language, places, progress, ct);
             progress.Report("skills and traits…");
-            entries.AddRange(await DownloadSkillsAndTraitsAsync(language, ct));
+            entries.AddRange(await DownloadSkillsAndTraitsAsync(language, progress, ct));
 
             var cache = new CacheFile
             {
@@ -290,6 +324,7 @@ namespace TyriaSearch
 
             var seenLinks = new HashSet<string>(StringComparer.Ordinal);
             var seenMaps = new HashSet<int>();
+            var mapAreas = new Dictionary<int, (int continent, float[][] rect)>();
             var seenSectors = new HashSet<(int, string)>();
             var entries = new List<SearchEntry>();
             foreach (var (continent, floor) in results)
@@ -297,6 +332,7 @@ namespace TyriaSearch
             foreach (var map in region.Maps?.Values ?? Enumerable.Empty<MapDto>())
             {
                 string mapName = map.Name?.Trim() ?? "";
+                if (map.ContinentRect?.Length == 2 && !mapAreas.ContainsKey(map.Id)) mapAreas[map.Id] = (continent, map.ContinentRect);
                 if (seenMaps.Add(map.Id) && mapName.Length > 0 && map.ContinentRect?.Length == 2)
                 {
                     places.Add(new Place
@@ -347,10 +383,19 @@ namespace TyriaSearch
             }
 
             // Hearts, hero challenges, mastery points and adventures have no chat link of their own: give them the nearest waypoint's.
-            var waypoints = entries.Where(e => e.Kind == EntryKind.Waypoint && e.X.HasValue).ToLookup(e => e.MapId);
+            // Some maps overlay another and use its waypoints ("Gendarran Fields (Public)" on Gendarran Fields), whose
+            // chat links were kept for the map read first; those fall back to waypoints of maps covering the same spot.
+            var allWaypoints = entries.Where(e => e.Kind == EntryKind.Waypoint && e.X.HasValue).ToList();
+            var waypoints = allWaypoints.ToLookup(e => e.MapId);
+            bool Covers(int mapId, int continent, float x, float y) =>
+                mapAreas.TryGetValue(mapId, out var area) && area.continent == continent
+                && x >= area.rect[0][0] && x <= area.rect[1][0] && y >= area.rect[0][1] && y <= area.rect[1][1];
             foreach (var entry in entries.Where(e => e.ChatLink == null && e.X.HasValue))
             {
-                var nearest = waypoints[entry.MapId]
+                IEnumerable<SearchEntry> candidates = waypoints[entry.MapId];
+                if (!candidates.Any() && mapAreas.TryGetValue(entry.MapId, out var own))
+                    candidates = allWaypoints.Where(w => Covers(w.MapId, own.continent, entry.X.Value, entry.Y.Value));
+                var nearest = candidates
                     .OrderBy(w => (w.X.Value - entry.X.Value) * (w.X.Value - entry.X.Value) + (w.Y.Value - entry.Y.Value) * (w.Y.Value - entry.Y.Value))
                     .FirstOrDefault();
                 entry.ChatLink = nearest?.ChatLink;
@@ -397,7 +442,7 @@ namespace TyriaSearch
 
             foreach (var point in map.MasteryPoints ?? new List<MasteryPointDto>())
             {
-                string icon = point.Region != null && MasteryIcons.TryGetValue(point.Region, out int asset) ? SearchEntry.AssetIcon + asset : null;
+                string icon = point.Region != null && MasteryIcons.TryGetValue(point.Region, out var name) ? SearchEntry.BundledIcon + name : null;
                 Add(EntryKind.MasteryPoint, $"mastery:{point.Id}", MasteryPointName, mapName, icon, point.Coord);
             }
 
@@ -405,7 +450,103 @@ namespace TyriaSearch
                 Add(EntryKind.Adventure, $"adventure:{adventure.Id}", adventure.Name, mapName, AdventureIcon, adventure.Coord);
         }
 
-        private async Task<List<SearchEntry>> DownloadSkillsAndTraitsAsync(string language, CancellationToken ct)
+        /// <summary>
+        /// Icons for skills the API gives none, or only its missing icon: the wiki's (by game id), as wiki image URLs, or
+        /// null where the wiki has none. Best effort: if the wiki can't be reached, the rest keep no icon until next time.
+        /// </summary>
+        private async Task<Dictionary<int, string>> WikiSkillIconsAsync(IEnumerable<int> ids, IProgress<string> progress, CancellationToken ct)
+        {
+            List<int> unknown;
+            lock (_wikiSkillIcons) unknown = ids.Distinct().Where(id => !_wikiSkillIcons.ContainsKey(id)).ToList();
+            for (int start = 0; start < unknown.Count; start += WikiIconBatch)
+            {
+                progress.Report($"skill icons from the wiki ({start * 100 / unknown.Count}%)…");
+                var batch = unknown.Skip(start).Take(WikiIconBatch).ToList();
+                var found = new Dictionary<int, string>();
+                try
+                {
+                    var response = await AskAsync($"[[Has context::Skill]][[Has game id::{string.Join("||", batch)}]]|?Has game id|?Has game icon|limit=500", ct);
+                    if (response["error"] != null) throw new HttpRequestException($"The wiki refused the query: {response["error"]}");
+                    // Results include each page's subobjects (game mode splits), which name the same icon.
+                    foreach (var result in AskResults(response))
+                    {
+                        var printouts = result.Value["printouts"];
+                        string file = PageNames(printouts?["Has game icon"]).FirstOrDefault();
+                        if (file == null) continue;
+                        foreach (int id in (printouts["Has game id"] as JArray ?? new JArray()).Select(v => v.Value<int>()))
+                            if (!found.ContainsKey(id)) found[id] = WikiFileUrl(file);
+                    }
+                }
+                catch (HttpRequestException ex)
+                {
+                    Logger.Warn(ex, "Couldn't get skill icons from the wiki.");
+                    break; // the wiki is likely down; don't keep asking
+                }
+                lock (_wikiSkillIcons)
+                    foreach (int id in batch) _wikiSkillIcons[id] = found.TryGetValue(id, out var url) ? url : null;
+            }
+            lock (_wikiSkillIcons) return new Dictionary<int, string>(_wikiSkillIcons);
+        }
+
+        /// <summary>Notes the wiki icon lookups in saved data: wiki icons, and the API's missing icon where the wiki had none.</summary>
+        private void RememberWikiSkillIcons(CacheFile saved)
+        {
+            // Only data from this version looked icons up on the wiki.
+            if (saved.Version != MainCacheVersion) return;
+            lock (_wikiSkillIcons)
+                foreach (var entry in saved.Entries ?? new List<SearchEntry>())
+                {
+                    if (entry.Kind != EntryKind.Skill || !(entry.Icon?.StartsWith(WikiImages) == true || IsMissingIcon(entry.Icon))) continue;
+                    int? id = ChatLinkId(entry.ChatLink);
+                    if (id != null && !_wikiSkillIcons.ContainsKey(id.Value))
+                        _wikiSkillIcons[id.Value] = entry.Icon?.StartsWith(WikiImages) == true ? entry.Icon : null;
+                }
+        }
+
+        /// <summary>The id in a skill, trait or item chat link ("[&BjcxAAA=]"): the 4 bytes after the type byte.</summary>
+        private static int? ChatLinkId(string chatLink)
+        {
+            if (chatLink == null || !chatLink.StartsWith("[&") || !chatLink.EndsWith("]")) return null;
+            try
+            {
+                byte[] bytes = Convert.FromBase64String(chatLink.Substring(2, chatLink.Length - 3));
+                return bytes.Length >= 5 ? BitConverter.ToInt32(bytes, 1) : (int?)null;
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>The image URL of a wiki file page ("File:Quicksand.png"), from MediaWiki's MD5-based upload layout.</summary>
+        private static string WikiFileUrl(string filePage)
+        {
+            string name = filePage.Substring(filePage.IndexOf(':') + 1).Replace(' ', '_');
+            string hash;
+            using (var md5 = MD5.Create())
+                hash = string.Concat(md5.ComputeHash(Encoding.UTF8.GetBytes(name)).Select(b => b.ToString("x2")));
+            return $"{WikiImages}{hash[0]}/{hash.Substring(0, 2)}/{Uri.EscapeDataString(name)}";
+        }
+
+        /// <summary>Downloads a file, e.g. a wiki icon.</summary>
+        public async Task<byte[]> GetBytesAsync(string url, CancellationToken ct)
+        {
+            await _wikiSlots.WaitAsync(ct);
+            try
+            {
+                using (var response = await _http.GetAsync(url, ct))
+                {
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsByteArrayAsync();
+                }
+            }
+            finally
+            {
+                _wikiSlots.Release();
+            }
+        }
+
+        private async Task<List<SearchEntry>> DownloadSkillsAndTraitsAsync(string language, IProgress<string> progress, CancellationToken ct)
         {
             var skillsTask = GetAsync<List<SkillDto>>($"{Api}skills?ids=all&lang={language}", _apiSlots, ct);
             var traitsTask = GetAsync<List<TraitDto>>($"{Api}traits?ids=all&lang={language}", _apiSlots, ct);
@@ -418,10 +559,12 @@ namespace TyriaSearch
             string Profession(string id) => id != null && professions.TryGetValue(id, out var name) ? name : id;
             var specs = specsTask.Result.ToDictionary(s => s.Id);
 
+            var skills = skillsTask.Result.Where(s => !string.IsNullOrWhiteSpace(s.Name) && !string.IsNullOrWhiteSpace(s.ChatLink)).ToList();
+            var wikiIcons = await WikiSkillIconsAsync(skills.Where(s => IsMissingIcon(s.Icon)).Select(s => s.Id), progress, ct);
+
             var entries = new List<SearchEntry>();
-            foreach (var skill in skillsTask.Result)
+            foreach (var skill in skills)
             {
-                if (string.IsNullOrWhiteSpace(skill.Name) || string.IsNullOrWhiteSpace(skill.ChatLink)) continue;
                 var context = (skill.Professions ?? new List<string>()).Select(Profession).ToList();
                 if (!string.IsNullOrEmpty(skill.Slot)) context.Add(skill.Slot.Replace('_', ' '));
                 entries.Add(new SearchEntry
@@ -430,7 +573,7 @@ namespace TyriaSearch
                     ChatLink = skill.ChatLink,
                     Name = skill.Name.Trim(),
                     Context = string.Join(" · ", context), // empty for NPC and monster skills
-                    Icon = skill.Icon,
+                    Icon = IsMissingIcon(skill.Icon) && wikiIcons.TryGetValue(skill.Id, out var wikiIcon) && wikiIcon != null ? wikiIcon : skill.Icon,
                 });
             }
 
@@ -891,6 +1034,7 @@ namespace TyriaSearch
 
         private sealed class SkillDto
         {
+            [JsonProperty("id")] public int Id { get; set; }
             [JsonProperty("name")] public string Name { get; set; }
             [JsonProperty("chat_link")] public string ChatLink { get; set; }
             [JsonProperty("icon")] public string Icon { get; set; }

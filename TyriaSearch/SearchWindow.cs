@@ -283,6 +283,7 @@ namespace TyriaSearch
                     Title = entry.Name,
                     Subtitle = Describe(item),
                     Icon = _module.IconFor(entry),
+                    PlaceholderIcon = _module.BundledIconFor(entry),
                     TitleColor = entry.Rarity != null && RarityColors.TryGetValue(entry.Rarity, out var color) ? color : Color.White,
                     BasicTooltipText = Tooltip(item),
                 };

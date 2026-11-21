@@ -23,6 +23,8 @@ namespace TyriaSearch
         public string Title { get; set; }
         public string Subtitle { get; set; }
         public AsyncTexture2D Icon { get; set; }
+        /// <summary>Drawn while <see cref="Icon"/> is still downloading.</summary>
+        public Texture2D PlaceholderIcon { get; set; }
         public Color TitleColor { get; set; } = Color.White;
 
         public ResultRow(SearchItem item)
@@ -35,8 +37,9 @@ namespace TyriaSearch
         {
             if (MouseOver) spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, bounds, HoverColor);
 
-            if (Icon != null && Icon.HasTexture)
-                spriteBatch.DrawOnCtrl(this, Icon, new Rectangle(8, (Height - IconSize) / 2, IconSize, IconSize));
+            var iconRect = new Rectangle(8, (Height - IconSize) / 2, IconSize, IconSize);
+            if (Icon != null && Icon.HasTexture) spriteBatch.DrawOnCtrl(this, Icon, iconRect);
+            else if (PlaceholderIcon != null) spriteBatch.DrawOnCtrl(this, PlaceholderIcon, iconRect);
 
             int textWidth = Width - TextLeft - 4;
             spriteBatch.DrawStringOnCtrl(this, Title ?? "", GameService.Content.DefaultFont16,

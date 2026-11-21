@@ -20,6 +20,7 @@ namespace TyriaSearch
 
         private readonly Func<int, int> _continentOf;
         private readonly Func<SearchEntry, AsyncTexture2D> _iconFor;
+        private readonly Func<SearchEntry, Texture2D> _placeholderFor;
 
         public List<SearchItem> Targets { get; } = new List<SearchItem>();
 
@@ -53,10 +54,12 @@ namespace TyriaSearch
         private const double PortalLabelMaxScale = 8;
 
         /// <param name="continentOf">Continent of a map id: Tyria (1) or the Mists (2).</param>
-        public MapMarker(Func<int, int> continentOf, Func<SearchEntry, AsyncTexture2D> iconFor)
+        /// <param name="placeholderFor">Bundled icon drawn while the result's own icon downloads.</param>
+        public MapMarker(Func<int, int> continentOf, Func<SearchEntry, AsyncTexture2D> iconFor, Func<SearchEntry, Texture2D> placeholderFor)
         {
             _continentOf = continentOf;
             _iconFor = iconFor;
+            _placeholderFor = placeholderFor;
         }
 
         protected override CaptureType CapturesInput() => CaptureType.None;
@@ -173,7 +176,7 @@ namespace TyriaSearch
             int size = (int)(IconSize * view.IconScale * (offScreen ? 0.8f : 1f + 0.15f * pulse));
 
             var icon = _iconFor(entry);
-            if (icon == null || !icon.HasTexture) icon = GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
+            if (icon == null || !icon.HasTexture) icon = _placeholderFor(entry) ?? GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
 
             var iconRect = new Rectangle((int)pinned.X - size / 2, (int)pinned.Y - size / 2, size, size);
             spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, Inflate(iconRect, view.Minimap ? 2 : 4), Color.Black * 0.5f);

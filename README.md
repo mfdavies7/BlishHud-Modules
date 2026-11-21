@@ -68,7 +68,7 @@ Open it with the magnifier icon at the top left or the hotkey, and type. Results
 - **Enter** copies the top result, closes the window and returns to the game, ready to paste.
 - **Right-click** a result for the menu (changeable in settings): Copy Chat Link, Paste into Chat or Whisper to Yourself; Show on Map / Remove from Map; Copy /wiki Command; Open Wiki Page; Add to / Remove from Favourites; Clear All Map Markers. **Shift-click** always opens the menu.
 - **Show on Map** marks the result on the world map (M); you can mark several at once. If one is off screen, its marker sits at the screen edge pointing the way. Remove one from its menu, or all with the **Clear Markers** button next to the status line, the menu or the Clear Map Markers Hotkey.
-- With the search box empty, the window shows your favourites. Item names are coloured by rarity. Results without a game icon (most NPCs, many wiki pages) get a plain one for their kind.
+- With the search box empty, the window shows your favourites. Item names are coloured by rarity. Skills the API has no icon for get the wiki's (saved in `tyriasearch/wiki-icons`). Results without a game icon (most NPCs, many wiki pages) get a plain one for their kind, which is also shown while an icon downloads.
 - If nothing matches, it asks the wiki live and lists the pages it finds (places, NPCs, objects, items), placed on the map and linked to their nearest waypoint where possible. Item pages get the item's chat link. A last result opens the full wiki search in your browser.
 - The **Wiki** category in the dropdown skips the downloaded data and asks the wiki straight away, once you pause typing (3 letters or more). It works even with Search the Wiki When Nothing Matches off.
 
@@ -82,7 +82,7 @@ Portals are searchable too, under **Portals**: "Portal to Kessex Hills", "Asura 
 
 Data is downloaded from the GW2 API and the wiki the first time, then in full every 30 days (see **Full Download Every (Days)**). After a game update, only what changed is fetched: new items, and places, skills and traits only if maps, skills or traits were added or removed (a check of three small lists).
 
-- Places, skills and traits: about 1.5 MB per language, under a minute.
+- Places, skills and traits: about 1.5 MB per language, under a minute. On a full download, add a minute or two once to look up skill icons the API lacks on the wiki.
 - NPCs: about 2 MB, a few minutes (the wiki is slower than the API).
 - Events: about 1 MB, under a minute.
 - Items: about 10 MB per language, a few minutes.
@@ -98,6 +98,7 @@ The settings are in their own window, in sections (Search Window, Search Options
 - **Second Search Language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
 - **Full Download Every (Days)** (30, Every Update, 7–365 or Never) – how often all search data is downloaded again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. At the lowest setting, Every Update, everything (including NPCs and events) is downloaded again after each game update instead. At the highest, Never, nothing is downloaded again except what game updates add and anything missing; NPCs and events then stay as first downloaded until you press **Update Data**.
 - **Open Map After Show on Map** (on) – opens the world map after Show on Map, if it isn't open already.
+- **Zoom Out Map After Opening** (on) – when Open Map After Show on Map opens the world map, zooms it all the way out so the marker is on screen. It scrolls the mouse wheel, so keep the cursor over the game.
 - **Game's Map Key** (M) – the World Map key from the game's Control Options, pressed by Open Map After Show on Map.
 - **Clear Map Markers Hotkey** (unbound) – removes all map markers, also while the map is open.
 - **Show on the Minimap** (on) – also draws Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of the minimap's range sits at its edge, pointing the way. Names are left off there for lack of room.
