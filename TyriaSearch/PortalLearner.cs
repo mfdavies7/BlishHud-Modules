@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Blish_HUD;
-using mfdavies7.ModuleShared;
+using Bytex.ModuleShared;
 using Newtonsoft.Json;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// Notices portals the bundled list doesn't have, for the player to review; the ones they add are saved to

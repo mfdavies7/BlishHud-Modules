@@ -3,10 +3,10 @@ using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Controls.Extern;
 using Microsoft.Xna.Framework.Input;
-using static mfdavies7.ModuleShared.ChatInput;
+using static Bytex.ModuleShared.ChatInput;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// Whole chat actions built from <see cref="ChatInput"/>. They use the clipboard and leave whatever they put there;
@@ -20,7 +20,7 @@ namespace mfdavies7.ModuleShared
             { Keys.LeftShift, Keys.RightShift, Keys.LeftControl, Keys.RightControl, Keys.LeftAlt, Keys.RightAlt };
 
         // Put on the clipboard before copying the chat box; still there afterwards means the box was empty.
-        private const string DraftCheckMarker = "mfdavies7.ModuleShared:empty-chat-check";
+        private const string DraftCheckMarker = "Bytex.ModuleShared:empty-chat-check";
 
         /// <summary>A Blish HUD text box takes keyboard focus from GW2; simulated keys must go to the game.</summary>
         public static async Task FocusGameAsync()

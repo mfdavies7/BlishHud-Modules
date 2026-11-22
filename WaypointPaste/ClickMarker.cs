@@ -3,7 +3,7 @@ using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace mfdavies7.WaypointPaste
+namespace Bytex.WaypointPaste
 {
     /// <summary>
     /// Crosshair centred on where Auto-Click Chat Link clicks. Never takes input, so it can't block the click

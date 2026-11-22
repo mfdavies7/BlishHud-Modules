@@ -13,12 +13,12 @@ using Blish_HUD.Settings;
 using Gw2Sharp.ChatLinks;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using mfdavies7.ModuleShared;
-using static mfdavies7.ModuleShared.ChatInput;
+using Bytex.ModuleShared;
+using static Bytex.ModuleShared.ChatInput;
 using Mouse = Blish_HUD.Controls.Intern.Mouse;
 using MouseButton = Blish_HUD.Controls.Intern.MouseButton;
 
-namespace mfdavies7.WaypointPaste
+namespace Bytex.WaypointPaste
 {
     /// <summary>What clicking the corner icon does.</summary>
     public enum IconAction
@@ -78,7 +78,7 @@ namespace mfdavies7.WaypointPaste
             // Saved under its old key, so the choice made with Show Corner Icon carries over.
             _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
                 () => "Register Corner Icon",
-                () => "Whether the module should register a corner icon. Off: paste with Paste Waypoint Hotkey, and open the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+                () => "Whether the module should register a corner icon. Off: paste with Paste Waypoint Hotkey, and open the settings with Settings on the module's page in Blish HUD's settings.");
             _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
                 () => "Corner Icon Left Click Action",
                 () => "Defines the action of the corner icon when left clicked. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
@@ -149,14 +149,14 @@ namespace mfdavies7.WaypointPaste
             _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: true, _iconLeftClick, _iconRightClick);
-            // The same window as Tyria Search's settings, so the two look alike.
+            // The same window as the other modules' settings, so they look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
                 Parent = GameService.Graphics.SpriteScreen,
                 Title = "Waypoint Paste",
                 Subtitle = "Settings",
                 Emblem = _icon,
-                Id = "mfdavies7.waypointpaste.settings",
+                Id = "bytex.waypointpaste.settings",
                 SavesPosition = true,
             };
             return Task.CompletedTask;

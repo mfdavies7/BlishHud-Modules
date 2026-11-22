@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     // What result tooltips show of skills, traits and items, as the API gives it. Fetched live (see GameTooltips),
     // so none of this is in the cache files. Only the fields a tooltip shows; Json.NET skips the rest.

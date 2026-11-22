@@ -17,11 +17,11 @@ using Gw2Sharp.WebApi;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using mfdavies7.ModuleShared;
-using static mfdavies7.ModuleShared.ChatInput;
+using Bytex.ModuleShared;
+using static Bytex.ModuleShared.ChatInput;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
-namespace mfdavies7.WikiSearch
+namespace Bytex.WikiSearch
 {
     public enum WikiLanguage { GameLanguage, English, German, French, Spanish }
 
@@ -29,7 +29,7 @@ namespace mfdavies7.WikiSearch
     public enum IconAction
     {
         [Description("Open Settings")] OpenSettings,
-        [Description("Toggle WikiSearch")] ToggleWikiSearch,
+        [Description("Toggle Wiki Search")] ToggleWikiSearch,
         [Description("Open Wiki")] OpenWiki,
         [Description("Nothing")] Nothing,
     }
@@ -45,7 +45,7 @@ namespace mfdavies7.WikiSearch
         private static readonly Regex LinkAtEnd = new Regex(@"\[[^\[\]]+\]$");
 
         // Put on the clipboard before a copy; still there afterwards means nothing was selected.
-        private const string CopyCheckMarker = "mfdavies7.WikiSearch:empty-copy-check";
+        private const string CopyCheckMarker = "Bytex.WikiSearch:empty-copy-check";
 
         private SettingEntry<WikiLanguage> _language;
         private SettingEntry<KeyBinding> _toggleKey;
@@ -75,7 +75,7 @@ namespace mfdavies7.WikiSearch
             // Saved under its old key, so the choice made with Show Corner Icon carries over.
             _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
                 () => "Register Corner Icon",
-                () => "Whether the module should register a corner icon. Off: turn Wiki Search on or off with Toggle Hotkey, and open the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+                () => "Whether the module should register a corner icon. Off: turn Wiki Search on or off with Toggle Hotkey, and open the settings with Settings on the module's page in Blish HUD's settings.");
             _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
                 () => "Corner Icon Left Click Action",
                 () => "Defines the action of the corner icon when left clicked. Open Wiki opens the wiki's main page in Wiki Language.");
@@ -153,7 +153,7 @@ namespace mfdavies7.WikiSearch
                 Title = "Wiki Search",
                 Subtitle = "Settings",
                 Emblem = _icon,
-                Id = "mfdavies7.wikisearch.settings",
+                Id = "bytex.wikisearch.settings",
                 SavesPosition = true,
             };
             return Task.CompletedTask;
@@ -296,7 +296,7 @@ namespace mfdavies7.WikiSearch
                    && gw2.IsInGame // not on character select or a loading screen
                    && gw2.Gw2HasFocus
                    && (_workWithMapOpen.Value || !ui.IsMapOpen)
-                   && (_overwriteUnsentText.Value ||!ui.IsTextInputFocused);
+                   && (_overwriteUnsentText.Value || !ui.IsTextInputFocused);
         }
 
         private async Task RunWikiSearchAsync(bool chatWasOpen)

@@ -4,7 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>What a portal is, which picks its map icon.</summary>
     internal enum PortalKind { Zone, AsuraGate, Dungeon, Raid, Fractal }
@@ -24,7 +24,7 @@ namespace mfdavies7.TyriaSearch
         [JsonIgnore] public int DestinationMapId { get; set; }
 
         /// <summary>
-        /// The portals in ref/portals.json, made by tools/make_portals.py from Tekkit's All-In-One marker pack, or the ones
+        /// The portals in ref/portals.json, made from Tekkit's All-In-One marker pack, or the ones
         /// <see cref="PortalLearner"/> saved, in the same format.
         /// </summary>
         public static List<Portal> Load(Stream json)
@@ -49,6 +49,7 @@ namespace mfdavies7.TyriaSearch
             PortalKind.AsuraGate => "Asura Gate",
             PortalKind.Dungeon => "Dungeon Entrance",
             PortalKind.Raid => "Raid Entrance",
+            PortalKind.Fractal => "Fractal Entrance",
             _ => "Portal",
         };
 

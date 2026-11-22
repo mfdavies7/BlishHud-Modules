@@ -5,7 +5,7 @@ using Blish_HUD;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// The panel at the top of the screen that asks about portals <see cref="PortalLearner"/> noticed, one at a time: the
@@ -76,7 +76,7 @@ namespace mfdavies7.TyriaSearch
             _destination = new TextBox
             {
                 Parent = _panel, Location = new Point(5 + LabelWidth, 32), Size = new Point(width - LabelWidth, 26),
-                BasicTooltipText = "Where the portal leads, as the wiki names it: the search and map label say \"Portal to\" this, and the wiki opens its page.",
+                BasicTooltipText = "Where the portal leads, as the wiki names it: the search result and map label are named after it, and the wiki opens its page.",
             };
             _kindLabel = new Label { Parent = _panel, Location = new Point(5, 64), Size = new Point(LabelWidth, 26), Text = "Kind", VerticalAlignment = VerticalAlignment.Middle };
             _kind = new Dropdown { Parent = _panel, Location = new Point(5 + LabelWidth, 64), Width = width - LabelWidth, BasicTooltipText = "Which icon the portal gets on the world map." };

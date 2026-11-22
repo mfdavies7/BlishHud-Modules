@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>A position on the map, as precise as the source allows.</summary>
     public struct Placement

@@ -15,12 +15,12 @@ using Blish_HUD.Settings;
 using Gw2Sharp.WebApi;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using mfdavies7.ModuleShared;
+using Bytex.ModuleShared;
 using Blish_HUD.Controls.Extern;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 using Mouse = Blish_HUD.Controls.Intern.Mouse;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     public enum SearchLanguage { None, English, German, French, Spanish }
 
@@ -127,7 +127,7 @@ namespace mfdavies7.TyriaSearch
         internal ResultAction LeftClick => _leftClick.Value;
         internal ResultAction RightClick => _rightClick.Value;
         internal IReadOnlyList<string> Favourites => _favourites.Value;
-        /// <summary>Game-style tooltips for skill, trait and item results.</summary>
+        /// <summary>Game-style tooltips for skill, trait, item and effect results.</summary>
         internal GameTooltips Tooltips { get; private set; }
         internal bool IsFavourite(SearchItem item) => _favourites.Value.Contains(item.Entry.Key);
         internal int MapMarkerCount => _mapMarker?.Targets.Count ?? 0;
@@ -164,7 +164,7 @@ namespace mfdavies7.TyriaSearch
             // Saved under its old key, so the choice made with Show Corner Icon carries over.
             _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
                 () => "Register Corner Icon",
-                () => "Whether the module should register a corner icon. Off: open the search with Open Search Hotkey, and the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+                () => "Whether the module should register a corner icon. Off: open the search with Open Search Hotkey, and the settings with Settings on the module's page in Blish HUD's settings.");
             _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
                 () => "Corner Icon Left Click Action",
                 () => "Defines the action of the corner icon when left clicked. Open Settings and Open Search close the window again if it's already open.");
@@ -285,7 +285,7 @@ namespace mfdavies7.TyriaSearch
             if (_favourites.Value == null) _favourites.Value = new List<string>();
 
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
-            _data = new Gw2Data(directory);
+            _data = new Gw2Data(directory, ModuleParameters.Manifest.Version.ToString());
             Tooltips = new GameTooltips(_data, () => _indexLanguages[0], IconFor, BundledIconFor, _unloading.Token);
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
@@ -313,7 +313,7 @@ namespace mfdavies7.TyriaSearch
                 Title = "Tyria Search",
                 Subtitle = "Settings",
                 Emblem = _icon,
-                Id = "mfdavies7.tyriasearch.settings",
+                Id = "bytex.tyriasearch.settings",
                 SavesPosition = true,
             };
 
@@ -468,7 +468,7 @@ namespace mfdavies7.TyriaSearch
         }
 
         // Search options that filter the downloaded data. Skills and traits are also left out of later downloads, and
-        // downloaded when turned back on; NPCs, events and items are handled by DataSetting_SettingChanged.
+        // downloaded when turned back on; NPCs, events, effects and items are handled by DataSetting_SettingChanged.
         private IEnumerable<SettingEntry<bool>> SearchOptions => new[]
         {
             _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits,
@@ -703,7 +703,7 @@ namespace mfdavies7.TyriaSearch
         private void RequestRefresh(bool force, bool restart)
         {
             if (!_refreshTask.IsCompleted && !restart) return;
-            // A settings change during Update data mustn't turn it into a partial update.
+            // A settings change during Update Data mustn't turn it into a partial update.
             force |= _refreshForced && !_refreshTask.IsCompleted;
             _refreshForced = force;
             _refreshCancel?.Cancel();

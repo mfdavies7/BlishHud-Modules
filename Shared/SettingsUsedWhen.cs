@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using Blish_HUD.Settings;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// Greys out settings that only matter while a condition holds, e.g.

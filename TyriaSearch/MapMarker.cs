@@ -8,7 +8,7 @@ using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// Marks search results on the world map while the map is open, and on the minimap (compass) while it's closed

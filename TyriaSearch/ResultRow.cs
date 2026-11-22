@@ -6,7 +6,7 @@ using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// One search result. Drawn in a single control so clicks anywhere on the row reach it,

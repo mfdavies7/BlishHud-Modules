@@ -5,9 +5,8 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
-    // Values are saved in the cache files; only add new ones at the end.
     // Saved as numbers in the cache files: add new kinds at the end.
     public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage, Portal, RenownHeart, HeroChallenge, MasteryPoint, Adventure, Event, Effect }
 
@@ -15,12 +14,18 @@ namespace mfdavies7.TyriaSearch
     public sealed class SearchEntry
     {
         [JsonProperty("k")] public EntryKind Kind { get; set; }
-        /// <summary>For NPCs, events, hero challenges, mastery points and adventures, the nearest waypoint's; null when no waypoint is known.</summary>
+        /// <summary>
+        /// For things without a chat link of their own (NPCs, events, portals, renown hearts, hero challenges, mastery points,
+        /// adventures, most wiki pages), the nearest waypoint's; null when no waypoint is known.
+        /// </summary>
         [JsonProperty("l")] public string ChatLink { get; set; }
         [JsonProperty("n")] public string Name { get; set; }
-        /// <summary>Map name for landmarks; profession and slot for skills and traits; rarity and type for items; area, map and services for NPCs.</summary>
+        /// <summary>
+        /// Area and map for landmarks; profession and slot for skills and traits; rarity, type and level for items; area, map
+        /// and services for NPCs; the type, or effect and duration, for effects. Parts are joined with " · ".
+        /// </summary>
         [JsonProperty("c")] public string Context { get; set; }
-        /// <summary>The API's description, without its markup, for skills, traits, items and adventures; null when there's none.</summary>
+        /// <summary>The description, without its markup, for skills, traits, items, adventures and effects; null when there's none.</summary>
         [JsonProperty("d")] public string Description { get; set; }
         /// <summary>
         /// A render service URL, <see cref="BundledIcon"/> and the name of one shipped with the module,
@@ -38,7 +43,7 @@ namespace mfdavies7.TyriaSearch
         [JsonProperty("r")] public string Rarity { get; set; }
         /// <summary>The position is the centre of the named area, not the exact spot.</summary>
         [JsonProperty("a")] public bool Approximate { get; set; }
-        /// <summary>The chat link is the waypoint nearest to this (NPCs, wiki pages), not this itself.</summary>
+        /// <summary>The chat link is the waypoint nearest to this (see <see cref="ChatLink"/>), not this itself.</summary>
         [JsonProperty("w")] public bool LinkIsNearestWaypoint { get; set; }
 
         /// <summary>Identifies the entry across languages and in saved favourites.</summary>

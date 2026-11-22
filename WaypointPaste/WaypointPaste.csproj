@@ -3,10 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>mfdavies7.bh.WaypointPaste</AssemblyName>
-    <RootNamespace>mfdavies7.WaypointPaste</RootNamespace>
+    <AssemblyName>bytex.bh.WaypointPaste</AssemblyName>
+    <RootNamespace>Bytex.WaypointPaste</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <BlishHUDModuleFileName>mfdavies7.bh.WaypointPaste</BlishHUDModuleFileName>
+    <BlishHUDModuleFileName>bytex.bh.WaypointPaste</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>

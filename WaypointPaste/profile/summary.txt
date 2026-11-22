@@ -1,0 +1,1 @@
+Press a hotkey or click its icon to whisper a waypoint's chat link to yourself, ready to click or share. Can use a waypoint you copied and click the link for you.

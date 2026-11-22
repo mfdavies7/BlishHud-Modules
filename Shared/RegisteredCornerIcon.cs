@@ -5,7 +5,7 @@ using Blish_HUD.Input;
 using Blish_HUD.Settings;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// The module's corner icon, registered with Blish HUD only while Register Corner Icon is on (as Event Table does):

@@ -12,7 +12,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>A stretch of tooltip text in one colour.</summary>
     internal readonly struct TooltipRun
@@ -245,9 +245,9 @@ namespace mfdavies7.TyriaSearch
     }
 
     /// <summary>
-    /// Game-style tooltips for skill, trait and item results: what the game's own tooltip shows, from the API, then
+    /// Game-style tooltips for skill, trait, item and effect results: what the game's own tooltip shows, from the API, then
     /// the search's own information below. Each skill, trait or item is fetched once, the first time its tooltip shows,
-    /// in the display language, and kept for the session.
+    /// in the display language, and kept for the session. Effects show what the search data already has.
     /// </summary>
     internal sealed class GameTooltips
     {
@@ -776,7 +776,7 @@ namespace mfdavies7.TyriaSearch
                 case "Back":
                     return "Back Item";
                 default:
-                    // "Greatsword" says more than "Weapon"; "Default" and "Generic" say nothing.
+                    // "Food" says more than "Consumable"; "Default" and "Generic" say nothing.
                     return string.IsNullOrEmpty(detail) || detail == "Default" || detail == "Generic" ? SplitWords(item.Type) : SplitWords(detail);
             }
         }

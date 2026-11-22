@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Gw2Sharp.ChatLinks;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// Turns wiki data into search entries placed on the map: exact coordinates when the wiki has them, otherwise the

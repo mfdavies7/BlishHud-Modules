@@ -11,7 +11,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>The search box, category filter, status line and results list.</summary>
     internal sealed class SearchWindow : IDisposable
@@ -110,7 +110,7 @@ namespace mfdavies7.TyriaSearch
                 Parent = GameService.Graphics.SpriteScreen,
                 Title = "Tyria Search",
                 Emblem = emblem,
-                Id = "mfdavies7.tyriasearch.window",
+                Id = "bytex.tyriasearch.window",
                 SavesPosition = true,
             };
 
@@ -381,7 +381,7 @@ namespace mfdavies7.TyriaSearch
                 PlaceholderIcon = _module.BundledIconFor(entry),
                 TitleColor = entry.Rarity != null && RarityColors.TryGetValue(entry.Rarity, out var color) ? color : Color.White,
             };
-            // Skills, traits and items get the game's tooltip, fetched when first shown, with the search's information below it.
+            // Skills, traits and items get the game's tooltip, fetched when first shown, and effects one like it; the search's information goes below.
             if (GameTooltips.Supports(entry)) row.TooltipFactory = () => _module.Tooltips.Create(entry, $"{Describe(item)}\n{SearchInfo(item)}");
             else row.BasicTooltipText = Tooltip(item);
             row.Click += Row_Click;

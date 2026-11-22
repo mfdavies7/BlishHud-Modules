@@ -3,7 +3,7 @@ using Blish_HUD.Controls;
 using Blish_HUD.Graphics.UI;
 using Microsoft.Xna.Framework;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// Blish HUD's settings page for the module: the settings are in the module's own window, so this is just a button,

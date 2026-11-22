@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Threading;
 using Blish_HUD.Debug;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// Security software (anti-virus, a firewall, Controlled Folder Access) blocking a save or a download. Blish HUD's module

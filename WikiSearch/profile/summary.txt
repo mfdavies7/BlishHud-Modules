@@ -1,0 +1,1 @@
+Shift + left-click an item in Guild Wars 2 to open its wiki page in your browser. Works on the world map too, in English, German, French or Spanish.

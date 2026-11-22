@@ -8,7 +8,7 @@ Guild Wars 2 quality-of-life modules for [Blish HUD](https://blishhud.com). Each
 | [Waypoint Paste](WaypointPaste/README.md) | Press a hotkey to whisper a waypoint chat link to yourself, ready to click or share. |
 | [Tyria Search](TyriaSearch/README.md) | Search waypoints, points of interest, vistas, hearts, NPCs, events, portals, items, skills and traits, then copy, paste or whisper their chat links, or mark them on the map. |
 
-Every module keeps its settings in its own window, opened from its icon at the top left or from **Open Settings Window** on the module's page in Blish HUD's settings. When a module types into chat through the clipboard, it puts back whatever you had copied.
+Every module keeps its settings in its own window, opened from its icon at the top left or from the **Settings** button on the module's page in Blish HUD's settings. When a module types into chat through the clipboard, it puts back whatever you had copied.
 
 ## Build
 
@@ -20,8 +20,8 @@ dotnet build WaypointPaste -c Release
 dotnet build TyriaSearch -c Release
 ```
 
-Each module is written to `<Module>/bin/Release/mfdavies7.bh.<Module>.bhm`. Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
+Each module is written to `<Module>/bin/Release/bytex.bh.<Module>.bhm`. Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Credits
 
-Wiki Search and Waypoint Paste are inspired by KenediaDev's TyrianQoL, and Tyria Search combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; all are written from scratch. The Wiki Search hint icon is from [KenediaDev's TyrianQoL](https://github.com/KenediaDev/Kenedia.BlishHUD).
+Wiki Search and Waypoint Paste are inspired by KenediaDev's TyrianQoL, and Tyria Search combines ideas from previous search modules (Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder).

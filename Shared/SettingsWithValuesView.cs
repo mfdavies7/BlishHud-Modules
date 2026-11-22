@@ -8,7 +8,7 @@ using Blish_HUD.Settings;
 using Blish_HUD.Settings.UI.Views;
 using Microsoft.Xna.Framework;
 
-namespace mfdavies7.ModuleShared
+namespace Bytex.ModuleShared
 {
     /// <summary>A titled, collapsible group of settings, with optional buttons below them.</summary>
     internal sealed class SettingsSection

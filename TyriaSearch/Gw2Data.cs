@@ -11,15 +11,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using Blish_HUD;
 using Gw2Sharp.ChatLinks;
-using mfdavies7.ModuleShared;
+using Bytex.ModuleShared;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace mfdavies7.TyriaSearch
+namespace Bytex.TyriaSearch
 {
     /// <summary>
     /// Downloads searchable data from the GW2 API and the wiki, and keeps it in cache files:
-    /// landmarks, map activities, skills and traits per language; items per language; NPCs and events (the wiki is English only).
+    /// landmarks, map activities, skills and traits per language; items per language; NPCs, events and effects (the wiki is English only).
     /// </summary>
     public sealed class Gw2Data : IDisposable
     {
@@ -125,7 +125,8 @@ namespace mfdavies7.TyriaSearch
         // Fewer at once for the wiki, which is run by volunteers.
         private readonly SemaphoreSlim _wikiSlots = new SemaphoreSlim(2);
 
-        public Gw2Data(string cacheDirectory)
+        /// <param name="version">The module's version, for the User-Agent.</param>
+        public Gw2Data(string cacheDirectory, string version)
         {
             _cacheDirectory = cacheDirectory;
             // Floors are up to 8 MB of JSON each, about a tenth of that gzipped.
@@ -133,11 +134,11 @@ namespace mfdavies7.TyriaSearch
             {
                 Timeout = TimeSpan.FromSeconds(60),
             };
-            // The wiki refuses requests without one.
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("TyriaSearch/0.2 (Blish HUD module)");
+            // The wiki refuses requests without one, and asks for a way to contact whoever runs the client.
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd($"TyriaSearch/{version} (Blish HUD module; +https://github.com/mfdavies7/BlishHud-Modules)");
         }
 
-        /// <summary>A named area (sector) or a whole map, used to place NPCs, whose wiki pages only name where they are.</summary>
+        /// <summary>A named area (sector) or a whole map, used to place NPCs and events, whose wiki pages often only name where they are.</summary>
         public sealed class Place
         {
             [JsonProperty("n")] public string Name { get; set; }
