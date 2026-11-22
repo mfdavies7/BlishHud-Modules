@@ -15,6 +15,7 @@ namespace mfdavies7.TyriaSearch
     /// waypoint), from a spot no known portal is near. Teleport items and joining a squad member are channelled standing still.
     /// After a new portal, the next portal noticed straight back is taken as its return portal (see <see cref="ExpectReturn"/>);
     /// while the player is asked to go back, that trip skips the checks above, as they know it's through the return portal.
+    /// Spots the player said not to ask about again are saved to ignored-portals.json, in the same format, and never asked about.
     /// </summary>
     internal sealed class PortalLearner
     {
@@ -27,8 +28,8 @@ namespace mfdavies7.TyriaSearch
         private static readonly TimeSpan MovedWithin = TimeSpan.FromSeconds(5); // dungeon entrances ask first
         private static readonly TimeSpan MapClosedFor = TimeSpan.FromSeconds(2);
 
-        private readonly string _path;
-        private readonly List<Portal> _learned;
+        private readonly string _path, _ignoredPath;
+        private readonly List<Portal> _learned, _ignored;
 
         // The last Mumble update; it stops during loading screens, so these hold the spot before one.
         private int _tick, _mapId;
@@ -43,9 +44,14 @@ namespace mfdavies7.TyriaSearch
         {
             _path = Path.Combine(directory, "learned-portals.json");
             _learned = Load(_path);
+            _ignoredPath = Path.Combine(directory, "ignored-portals.json");
+            _ignored = Load(_ignoredPath);
         }
 
         public IReadOnlyList<Portal> Learned => _learned;
+
+        /// <summary>The spots the player said not to ask about again.</summary>
+        public IReadOnlyList<Portal> Ignored => _ignored;
 
         /// <summary>The learned portals changed and were saved: true when portals were added or removed, false for an edit.</summary>
         public event Action<bool> Changed;
@@ -60,7 +66,7 @@ namespace mfdavies7.TyriaSearch
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, $"Couldn't read {path}; learning portals again.");
+                Logger.Warn(ex, $"Couldn't read {path}; starting it again.");
             }
             return new List<Portal>();
         }
@@ -138,8 +144,12 @@ namespace mfdavies7.TyriaSearch
             if (destination == null) return Skip("destination map unknown to the API");
 
             float DistanceSquared(Portal p) => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y);
-            var near = known.FirstOrDefault(p => p.MapId == fromMap && (DistanceSquared(p) < AnyPortalRadius * AnyPortalRadius
-                || p.Destination == destination && DistanceSquared(p) < SameDestinationRadius * SameDestinationRadius));
+            bool Near(Portal p) => p.MapId == fromMap && (DistanceSquared(p) < AnyPortalRadius * AnyPortalRadius
+                || p.Destination == destination && DistanceSquared(p) < SameDestinationRadius * SameDestinationRadius);
+            // Checked even on the expected return trip: the player asked never to be asked here.
+            var ignored = _ignored.FirstOrDefault(Near);
+            if (ignored != null) return Skip($"told not to ask again here (portal to {ignored.Destination} at {ignored.X:0.0}, {ignored.Y:0.0})");
+            var near = known.FirstOrDefault(Near);
             if (!expected && near != null) return Skip($"known portal to {near.Destination} at {near.X:0.0}, {near.Y:0.0}");
 
             Logger.Info($"Noticed a new {(expected ? "return " : "")}portal on map {fromMap} at {x:0.0}, {y:0.0} to {destination} (map {toMap}).");
@@ -179,18 +189,33 @@ namespace mfdavies7.TyriaSearch
             Changed?.Invoke(true);
         }
 
+        /// <summary>Never asks about a portal at this portal's spot again.</summary>
+        public void Ignore(Portal portal)
+        {
+            _ignored.Add(portal);
+            Save(_ignored, _ignoredPath);
+        }
+
+        public void ForgetIgnored()
+        {
+            _ignored.Clear();
+            Save(_ignored, _ignoredPath);
+        }
+
+        private void Save() => Save(_learned, _path);
+
         /// <summary>One portal per line, like ref/portals.json.</summary>
-        private void Save()
+        private static void Save(List<Portal> portals, string path)
         {
             try
             {
-                var lines = _learned.Select(p => JsonConvert.SerializeObject(p));
-                File.WriteAllText(_path, "[\n" + string.Join(",\n", lines) + "\n]\n");
+                var lines = portals.Select(p => JsonConvert.SerializeObject(p));
+                File.WriteAllText(path, "[\n" + string.Join(",\n", lines) + "\n]\n");
             }
             catch (Exception ex)
             {
-                Blocked.Check(ex, _path);
-                Logger.Warn(ex, $"Couldn't save {_path}.");
+                Blocked.Check(ex, path);
+                Logger.Warn(ex, $"Couldn't save {path}.");
             }
         }
     }

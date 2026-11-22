@@ -43,7 +43,7 @@ namespace mfdavies7.ModuleShared
 
         private void Apply(bool register)
         {
-            foreach (var setting in _clickSettings) setting.SetDisabled(!register);
+            foreach (var setting in _clickSettings) SettingsUsedWhen.SetDisabled(setting, !register);
 
             if (register && Icon == null)
             {

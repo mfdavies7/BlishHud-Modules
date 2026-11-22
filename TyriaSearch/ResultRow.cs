@@ -1,6 +1,8 @@
+using System;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
+using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -26,11 +28,36 @@ namespace mfdavies7.TyriaSearch
         /// <summary>Drawn while <see cref="Icon"/> is still downloading.</summary>
         public Texture2D PlaceholderIcon { get; set; }
         public Color TitleColor { get; set; } = Color.White;
+        /// <summary>
+        /// Makes the row's tooltip the first time the mouse enters it, for tooltips that fetch what they show: making
+        /// one for every row would fetch for every result.
+        /// </summary>
+        public Func<Tooltip> TooltipFactory { get; set; }
 
         public ResultRow(SearchItem item)
         {
             Item = item;
             Height = RowHeight;
+        }
+
+        protected override void OnMouseEntered(MouseEventArgs e)
+        {
+            // Blish HUD reads the hovered control's tooltip on each mouse move, so this one shows from the next.
+            if (TooltipFactory != null)
+            {
+                Tooltip = TooltipFactory();
+                TooltipFactory = null;
+            }
+            base.OnMouseEntered(e);
+        }
+
+        protected override void DisposeControl()
+        {
+            // Rows are replaced on every search; their tooltips (and what they loaded) go with them.
+            var tooltip = Tooltip;
+            Tooltip = null;
+            tooltip?.Dispose();
+            base.DisposeControl();
         }
 
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)

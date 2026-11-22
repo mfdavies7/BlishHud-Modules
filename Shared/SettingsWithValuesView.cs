@@ -105,27 +105,49 @@ namespace mfdavies7.ModuleShared
         {
             foreach (var entry in entries.Where(e => e.SessionDefined))
             {
-                if (entry is SettingEntry<int> intEntry)
-                {
-                    BuildIntRow(flow, intEntry);
-                    continue;
-                }
-
                 // Hidden sub-collections hold values the module saves itself.
                 if (entry is SettingEntry<SettingCollection> sub && !sub.Value.RenderInUi) continue;
 
-                var view = SettingView.FromType(entry, flow.ContentRegion.Width);
-                if (view == null) continue;
-                var container = new ViewContainer
+                // Each row sits in its own holder so it can be rebuilt in place when the setting is disabled or enabled.
+                var holder = new Panel
                 {
                     Parent = flow,
                     WidthSizingMode = SizingMode.Fill,
                     HeightSizingMode = SizingMode.AutoSize,
                 };
-                container.Show(view);
+                BuildRow(holder, entry, flow.ContentRegion.Width);
+
+                void OnDisabledChanged(SettingEntry changed)
+                {
+                    if (changed != entry) return;
+                    foreach (var child in holder.Children.ToList()) child.Dispose();
+                    BuildRow(holder, entry, flow.ContentRegion.Width);
+                }
+
+                SettingsUsedWhen.DisabledChanged += OnDisabledChanged;
+                _unsubscribe.Add(() => SettingsUsedWhen.DisabledChanged -= OnDisabledChanged);
             }
 
             BuildButtons(flow, buttons);
+        }
+
+        private void BuildRow(Container holder, SettingEntry entry, int width)
+        {
+            if (entry is SettingEntry<int> intEntry)
+            {
+                BuildIntRow(holder, intEntry);
+                return;
+            }
+
+            var view = SettingView.FromType(entry, width);
+            if (view == null) return;
+            var container = new ViewContainer
+            {
+                Parent = holder,
+                WidthSizingMode = SizingMode.Fill,
+                HeightSizingMode = SizingMode.AutoSize,
+            };
+            container.Show(view);
         }
 
         private static void BuildButtons(FlowPanel flow, (string text, string tooltip, Action click)[] buttons)
@@ -158,6 +180,7 @@ namespace mfdavies7.ModuleShared
             choices.Add($"a value from {low} to {high}");
             choices.AddRange(named.Where(n => n.Key != min && n.Key != max).Select(n => $"{n.Value} ({n.Key})"));
             if (named.TryGetValue(max, out string maxName)) choices.Add(maxName);
+            bool enabled = !SettingsUsedWhen.IsDisabled(entry);
             string typeHint = choices.Count == 1 ? $"Type {choices[0]}, then press Enter."
                 : $"Type {string.Join(", ", choices.Take(choices.Count - 1))} or {choices.Last()}, then press Enter.";
 
@@ -169,6 +192,7 @@ namespace mfdavies7.ModuleShared
                 Location = new Point(5, 0),
                 Size = new Point(LabelWidth, RowHeight),
                 VerticalAlignment = VerticalAlignment.Middle,
+                TextColor = enabled ? Color.White : Control.StandardColors.DisabledText,
             };
 
             var trackBar = new TrackBar
@@ -180,6 +204,7 @@ namespace mfdavies7.ModuleShared
                 BasicTooltipText = tooltip,
                 Location = new Point(LabelWidth + 10, (RowHeight - 16) / 2),
                 Width = TrackBarWidth - extraBoxWidth,
+                Enabled = enabled,
             };
 
             var valueBox = new TextBox
@@ -190,6 +215,7 @@ namespace mfdavies7.ModuleShared
                 Location = new Point(trackBar.Right + 10, 0),
                 Size = new Point(ValueBoxWidth + extraBoxWidth, RowHeight),
                 HorizontalAlignment = HorizontalAlignment.Center,
+                Enabled = enabled,
             };
 
             void ApplyTyped()

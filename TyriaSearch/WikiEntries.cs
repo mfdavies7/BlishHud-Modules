@@ -158,6 +158,36 @@ namespace mfdavies7.TyriaSearch
         }
 
         /// <summary>
+        /// Starts the id of an effect from the wiki; the wiki page's title follows.
+        /// </summary>
+        public const string WikiEffectPrefix = "effect:";
+
+        /// <summary>
+        /// Effects from the wiki, named without the " (effect)" the wiki adds when a skill has the same name, unless
+        /// another effect has that name ("Might (effect)" beside the boon "Might"). Context: the effect's type ("Boon",
+        /// "Condition"), left out for plain effects. No chat link or map position.
+        /// </summary>
+        public static List<SearchEntry> BuildEffects(Gw2Data.EffectCacheFile effects)
+        {
+            const string suffix = " (effect)";
+            var all = effects.Effects.Where(e => !string.IsNullOrWhiteSpace(e.Title)).ToList();
+            var titles = new HashSet<string>(all.Select(e => e.Title), StringComparer.OrdinalIgnoreCase);
+            return all.Select(e =>
+            {
+                string shortName = e.Title.EndsWith(suffix, StringComparison.Ordinal) ? e.Title.Substring(0, e.Title.Length - suffix.Length) : null;
+                return new SearchEntry
+                {
+                    Kind = EntryKind.Effect,
+                    Id = WikiEffectPrefix + e.Title,
+                    Name = shortName != null && !titles.Contains(shortName) ? shortName : e.Title,
+                    Context = string.IsNullOrEmpty(e.Type) || e.Type == "Effect" ? "" : e.Type,
+                    Description = Gw2Data.CleanWikiText(e.Description),
+                    Icon = e.Icon,
+                };
+            }).ToList();
+        }
+
+        /// <summary>
         /// One entry per spot an event has coordinates for, else per area it starts in (that area's centre), else
         /// the last place its location path names. Context: where, then level and type ("Group event").
         /// </summary>

@@ -20,7 +20,7 @@ namespace mfdavies7.ModuleShared
         protected override void Build(Container buildPanel)
         {
             _panel = buildPanel;
-            _button = new StandardButton { Parent = buildPanel, Width = 180, Text = "Open Settings Window" };
+            _button = new StandardButton { Parent = buildPanel, Width = 180, Text = "Settings" };
             _button.Click += Button_Click;
             buildPanel.Resized += Panel_Resized;
             Center();

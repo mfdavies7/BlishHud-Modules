@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Content;
@@ -26,7 +27,7 @@ namespace mfdavies7.TyriaSearch
         private const int MessageSeconds = 4;
 
         // The game's rarity colours, Legendary lightened to read on the dark window.
-        private static readonly Dictionary<string, Color> RarityColors = new Dictionary<string, Color>
+        internal static readonly Dictionary<string, Color> RarityColors = new Dictionary<string, Color>
         {
             ["Junk"] = new Color(170, 170, 170),
             ["Fine"] = new Color(98, 164, 218),
@@ -95,6 +96,7 @@ namespace mfdavies7.TyriaSearch
                 ("Adventures", i => i.Entry.Kind == EntryKind.Adventure, EntryKind.Adventure),
                 ("NPCs", i => i.Entry.Kind == EntryKind.Npc, EntryKind.Npc),
                 ("Events", i => i.Entry.Kind == EntryKind.Event, EntryKind.Event),
+                ("Effects", i => i.Entry.Kind == EntryKind.Effect, EntryKind.Effect),
                 ("Items", i => i.Entry.Kind == EntryKind.Item, EntryKind.Item),
                 ("Skills", i => i.Entry.Kind == EntryKind.Skill, EntryKind.Skill),
                 ("Traits", i => i.Entry.Kind == EntryKind.Trait, EntryKind.Trait),
@@ -311,7 +313,14 @@ namespace mfdavies7.TyriaSearch
             _wikiRow = null;
             foreach (var item in _shownResults) AddRow(item, rowWidth);
 
+            // Whether the wiki's pages are listed in this category: Everything with Search the Wiki, any category with
+            // List Wiki Pages Below Results. Never for favourites (wiki pages can't be one) or a pasted chat code.
+            string category = _category.SelectedItem;
+            bool wikiHere = query.Length >= MinLiveQueryLength && !query.StartsWith("[&") && category != FavouritesCategory
+                            && (_module.WikiBelowResults || (_module.SearchWiki && category == EverythingCategory));
+
             // Nothing found locally: ask the wiki, which knows places, NPCs and objects the downloaded data doesn't.
+            // Otherwise (or once it has answered) a row opens the wiki search in the browser, whatever the settings.
             bool askingWiki = false;
             if (results.Live)
             {
@@ -323,7 +332,7 @@ namespace mfdavies7.TyriaSearch
             }
             else if (_shownResults.Count == 0 && query.Length > 0)
             {
-                askingWiki = _module.SearchWiki &&query.Length >= MinLiveQueryLength && _category.SelectedItem != FavouritesCategory;
+                askingWiki = results.WikiOnly ? query.Length >= MinLiveQueryLength : wikiHere;
                 if (askingWiki)
                 {
                     _ = new ResultRow(null)
@@ -342,9 +351,8 @@ namespace mfdavies7.TyriaSearch
                         : "No results here. Opens the wiki in your browser.");
                 }
             }
-            // Everything: the wiki's pages go below what was found here, once typing pauses. Not for a pasted chat code.
-            else if (_shownResults.Count > 0 && _category.SelectedItem == EverythingCategory && _module.SearchWiki
-                     && query.Length >= MinLiveQueryLength && !query.StartsWith("[&"))
+            // The wiki's pages go below what was found here, once typing pauses.
+            else if (_shownResults.Count > 0 && wikiHere)
             {
                 _wikiRow = new ResultRow(null)
                 {
@@ -372,8 +380,10 @@ namespace mfdavies7.TyriaSearch
                 Icon = _module.IconFor(entry),
                 PlaceholderIcon = _module.BundledIconFor(entry),
                 TitleColor = entry.Rarity != null && RarityColors.TryGetValue(entry.Rarity, out var color) ? color : Color.White,
-                BasicTooltipText = Tooltip(item),
             };
+            // Skills, traits and items get the game's tooltip, fetched when first shown, with the search's information below it.
+            if (GameTooltips.Supports(entry)) row.TooltipFactory = () => _module.Tooltips.Create(entry, $"{Describe(item)}\n{SearchInfo(item)}");
+            else row.BasicTooltipText = Tooltip(item);
             row.Click += Row_Click;
             row.RightMouseButtonReleased += Row_RightMouseButtonReleased;
         }
@@ -406,7 +416,7 @@ namespace mfdavies7.TyriaSearch
             row.Click += (_, __) => _module.OpenWikiSearch(query);
         }
 
-        /// <param name="appended">Everything: the pages go below the results already shown instead of replacing them.</param>
+        /// <param name="appended">The pages go below the results already shown instead of replacing them.</param>
         private void AskWiki(int version, string query, bool wikiOnly, bool appended)
         {
             _module.SearchWikiLiveAsync(query).ContinueWith(t =>
@@ -438,6 +448,7 @@ namespace mfdavies7.TyriaSearch
                 EntryKind.MasteryPoint => "Mastery Point",
                 EntryKind.Adventure => "Adventure",
                 EntryKind.Event => "Event",
+                EntryKind.Effect => "Effect",
                 _ => "Wiki Page",
             };
             var parts = new List<string> { kind };
@@ -450,6 +461,13 @@ namespace mfdavies7.TyriaSearch
 
         private string Tooltip(SearchItem item)
         {
+            string description = item.Entry.Description == null ? "" : Wrap(item.Entry.Description, DescriptionLineLength) + "\n\n";
+            return description + SearchInfo(item);
+        }
+
+        /// <summary>The result's chat link, what clicking it does and how exact its position is.</summary>
+        private string SearchInfo(SearchItem item)
+        {
             var entry = item.Entry;
             string position = !entry.X.HasValue ? ""
                 : entry.Approximate ? "\nPosition: centre of the area (the wiki has no exact spot)."
@@ -460,6 +478,31 @@ namespace mfdavies7.TyriaSearch
             string clicks = $"Click: {ActionText(_module.LeftClick, item)}. Right-click: {ActionText(_module.RightClick, item)}.";
             if (_module.LeftClick != ResultAction.ShowMenu && _module.RightClick != ResultAction.ShowMenu) clicks += " Shift-click: show the menu.";
             return $"{link}\n{clicks}{position}";
+        }
+
+        // Blish HUD's tooltip doesn't wrap, so long descriptions (some items' run to several sentences) are broken up here.
+        private const int DescriptionLineLength = 60;
+
+        /// <summary>Breaks each line of <paramref name="text"/> at spaces so none is much longer than <paramref name="length"/>.</summary>
+        private static string Wrap(string text, int length)
+        {
+            var lines = new List<string>();
+            foreach (string paragraph in text.Split('\n'))
+            {
+                var line = new StringBuilder();
+                foreach (string word in paragraph.Split(' '))
+                {
+                    if (line.Length > 0 && line.Length + 1 + word.Length > length)
+                    {
+                        lines.Add(line.ToString());
+                        line.Clear();
+                    }
+                    if (line.Length > 0) line.Append(' ');
+                    line.Append(word);
+                }
+                lines.Add(line.ToString());
+            }
+            return string.Join("\n", lines);
         }
 
         /// <summary>Whether the action can be done for this result; if not, clicking opens the wiki page.</summary>

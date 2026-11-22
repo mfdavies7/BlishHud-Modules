@@ -8,7 +8,8 @@ using Newtonsoft.Json;
 namespace mfdavies7.TyriaSearch
 {
     // Values are saved in the cache files; only add new ones at the end.
-    public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage, Portal, RenownHeart, HeroChallenge, MasteryPoint, Adventure, Event }
+    // Saved as numbers in the cache files: add new kinds at the end.
+    public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage, Portal, RenownHeart, HeroChallenge, MasteryPoint, Adventure, Event, Effect }
 
     /// <summary>One searchable thing in one language. Short JSON names keep the cache files small.</summary>
     public sealed class SearchEntry
@@ -19,6 +20,8 @@ namespace mfdavies7.TyriaSearch
         [JsonProperty("n")] public string Name { get; set; }
         /// <summary>Map name for landmarks; profession and slot for skills and traits; rarity and type for items; area, map and services for NPCs.</summary>
         [JsonProperty("c")] public string Context { get; set; }
+        /// <summary>The API's description, without its markup, for skills, traits, items and adventures; null when there's none.</summary>
+        [JsonProperty("d")] public string Description { get; set; }
         /// <summary>
         /// A render service URL, <see cref="BundledIcon"/> and the name of one shipped with the module,
         /// or <see cref="AssetIcon"/> and a game asset id.
@@ -71,7 +74,7 @@ namespace mfdavies7.TyriaSearch
     public sealed class SearchIndex
     {
         // Listing order by kind, indexed by EntryKind: places, NPCs and map activities first, then the ~4,500 events,
-        // then skills and traits, then the ~75,000 items, which would otherwise crowd everything else out of the result list.
+        // then skills, traits and effects, then the ~75,000 items, which would otherwise crowd everything else out of the result list.
         private static readonly int[] KindOrder =
         {
             0,  // Waypoint
@@ -79,15 +82,16 @@ namespace mfdavies7.TyriaSearch
             2,  // Vista
             10, // Skill
             11, // Trait
-            12, // Item
+            13, // Item
             4,  // Npc
-            13, // WikiPage (only in live wiki results)
+            14, // WikiPage (only in live wiki results)
             3,  // Portal
             5,  // RenownHeart
             6,  // HeroChallenge
             7,  // MasteryPoint
             8,  // Adventure
             9,  // Event
+            12, // Effect
         };
 
         private readonly List<SearchItem> _items;

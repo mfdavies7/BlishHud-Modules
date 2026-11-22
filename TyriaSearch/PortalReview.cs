@@ -25,6 +25,7 @@ namespace mfdavies7.TyriaSearch
 
         private readonly Action<Portal, bool> _add;
         private readonly Action<Portal, bool> _discard;
+        private readonly Action<Portal, bool> _ignore;
         private readonly Action _skipReturn;
         private readonly Queue<Candidate> _queue = new Queue<Candidate>();
 
@@ -32,7 +33,7 @@ namespace mfdavies7.TyriaSearch
         private readonly Label _origin, _destinationLabel, _kindLabel, _hint;
         private readonly TextBox _destination;
         private readonly Dropdown _kind;
-        private readonly StandardButton _addButton, _discardButton, _skipButton;
+        private readonly StandardButton _addButton, _discardButton, _ignoreButton, _skipButton;
 
         private readonly Func<Point?> _savedPosition;
         private readonly Action<Point> _savePosition;
@@ -44,16 +45,18 @@ namespace mfdavies7.TyriaSearch
 
         /// <param name="add">Adds the reviewed portal; true for a return portal.</param>
         /// <param name="discard">The player didn't want the portal; true for a return portal.</param>
+        /// <param name="ignore">The player never wants to be asked about this spot again; true for a return portal.</param>
         /// <param name="skipReturn">The player won't go back for the return portal.</param>
         /// <param name="savedPosition">Where the player last put the panel, or null for the top centre.</param>
         /// <param name="savePosition">Called when the player has dragged the panel.</param>
-        public PortalReview(Action<Portal, bool> add, Action<Portal, bool> discard, Action skipReturn,
+        public PortalReview(Action<Portal, bool> add, Action<Portal, bool> discard, Action<Portal, bool> ignore, Action skipReturn,
             Func<Point?> savedPosition, Action<Point> savePosition)
         {
             _savedPosition = savedPosition;
             _savePosition = savePosition;
             _add = add;
             _discard = discard;
+            _ignore = ignore;
             _skipReturn = skipReturn;
 
             _panel = new Panel
@@ -83,15 +86,23 @@ namespace mfdavies7.TyriaSearch
                 Parent = _panel, Location = new Point(5, 96), Size = new Point(width, 36), WrapText = true,
                 Font = GameService.Content.DefaultFont12, TextColor = new Color(200, 200, 200),
             };
-            _addButton = new StandardButton { Parent = _panel, Location = new Point(5, 136), Size = new Point(110, 26), Text = "Add" };
-            _discardButton = new StandardButton { Parent = _panel, Location = new Point(125, 136), Size = new Point(110, 26), Text = "Discard" };
+            // Add and Discard split the row between them.
+            int halfWidth = (width - 10) / 2;
+            _addButton = new StandardButton { Parent = _panel, Location = new Point(5, 136), Size = new Point(halfWidth, 26), Text = "Add" };
+            _discardButton = new StandardButton { Parent = _panel, Location = new Point(5 + width - halfWidth, 136), Size = new Point(halfWidth, 26), Text = "Discard" };
+            _ignoreButton = new StandardButton
+            {
+                Parent = _panel, Location = new Point(5, 168), Size = new Point(width, 26), Text = "Do Not Ask Again for This Location",
+                BasicTooltipText = "Don't add the portal, and never ask about a portal here again. Saved to ignored-portals.json in the tyriasearch folder; Forget Ignored Locations in the settings clears them.",
+            };
             _skipButton = new StandardButton
             {
-                Parent = _panel, Location = new Point(5, 136), Size = new Point(110, 26), Text = "Skip",
+                Parent = _panel, Location = new Point(5, 136), Size = new Point(width, 26), Text = "Skip",
                 BasicTooltipText = "Don't add the return portal.",
             };
-            _addButton.Click += (_, __) => Close(add: true);
-            _discardButton.Click += (_, __) => Close(add: false);
+            _addButton.Click += (_, __) => Close(Choice.Add);
+            _discardButton.Click += (_, __) => Close(Choice.Discard);
+            _ignoreButton.Click += (_, __) => Close(Choice.Ignore);
             _skipButton.Click += (_, __) => _skipReturn();
             _panel.LeftMouseButtonPressed += (_, __) => _dragOffset = GameService.Input.Mouse.Position - _panel.Location;
         }
@@ -166,25 +177,28 @@ namespace mfdavies7.TyriaSearch
         private void SetEditing(bool editing)
         {
             _destinationLabel.Visible = _destination.Visible = _kindLabel.Visible = _kind.Visible = editing;
-            _addButton.Visible = _discardButton.Visible = editing;
+            _addButton.Visible = _discardButton.Visible = _ignoreButton.Visible = editing;
             _skipButton.Visible = !editing;
         }
 
-        private void Close(bool add)
+        private enum Choice { Add, Discard, Ignore }
+
+        private void Close(Choice choice)
         {
             if (_queue.Count == 0) return;
             var candidate = _queue.Dequeue();
             var portal = candidate.Portal;
-            if (add)
+            if (choice == Choice.Discard)
             {
-                string destination = _destination.Text.Trim();
-                if (destination.Length > 0) portal.Destination = destination;
-                portal.Kind = Portal.KindFromLabel(_kind.SelectedItem);
-                _add(portal, candidate.IsReturn);
+                _discard(portal, candidate.IsReturn);
             }
             else
             {
-                _discard(portal, candidate.IsReturn);
+                // Ignored spots keep the edits too, so the file says what the player took the portal to be.
+                string destination = _destination.Text.Trim();
+                if (destination.Length > 0) portal.Destination = destination;
+                portal.Kind = Portal.KindFromLabel(_kind.SelectedItem);
+                (choice == Choice.Add ? _add : _ignore)(portal, candidate.IsReturn);
             }
             _destination.UnsetFocus();
             _stale = true; // show the next, or the return prompt

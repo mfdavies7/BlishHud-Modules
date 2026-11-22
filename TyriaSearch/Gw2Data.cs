@@ -33,7 +33,12 @@ namespace mfdavies7.TyriaSearch
         // 6: wiki icons for skills the API has none for.
         // 7: areas in landmark contexts, from sector bounds (kept for placing wiki coordinates); wiki icons for traits.
         // 8: full renown heart icon.
-        private const int MainCacheVersion = 8;
+        // 9: descriptions of skills, traits and adventures.
+        private const int MainCacheVersion = 9;
+        // Items have their own version too. 4: descriptions. 5: consumables' effects.
+        private const int ItemCacheVersion = 5;
+        // Effects from the wiki have their own version too.
+        private const int EffectCacheVersion = 1;
         // NPCs have their own version too. 4: wiki icons.
         private const int NpcCacheVersion = 4;
         private const int WikiAskLimit = 5000; // the ask API stops paging around offset 5,500
@@ -266,6 +271,90 @@ namespace mfdavies7.TyriaSearch
             public List<WikiEvent> Events { get; set; }
         }
 
+        /// <summary>An effect (boon, condition, control effect, aura…) from the wiki.</summary>
+        public sealed class WikiEffect
+        {
+            [JsonProperty("n")] public string Title { get; set; }
+            /// <summary>"Boon", "Condition", "Control effect", "Effect"…; null when the page names none.</summary>
+            [JsonProperty("t")] public string Type { get; set; }
+            /// <summary>The in-game description, as the wiki has it (with its links).</summary>
+            [JsonProperty("d")] public string Description { get; set; }
+            /// <summary>The page's game icon as a wiki image URL; null if it has none.</summary>
+            [JsonProperty("i")] public string Icon { get; set; }
+        }
+
+        public sealed class EffectCacheFile
+        {
+            public int Version { get; set; }
+            /// <summary>The game build when downloaded; 0 when Mumble hadn't connected.</summary>
+            public int GameBuild { get; set; }
+            public DateTime DownloadedUtc { get; set; }
+            public List<WikiEffect> Effects { get; set; }
+        }
+
+        private string EffectsPath => Path.Combine(_cacheDirectory, "search-effects.json");
+
+        public EffectCacheFile LoadEffects()
+        {
+            var cache = Load<EffectCacheFile>(EffectsPath);
+            return cache?.Version == EffectCacheVersion && cache.Effects != null ? cache : null;
+        }
+
+        /// <inheritdoc cref="StampNpcs"/>
+        public void StampEffects(EffectCacheFile cache, int gameBuild)
+        {
+            cache.GameBuild = gameBuild;
+            Save(EffectsPath, cache);
+        }
+
+        /// <summary>
+        /// About 5,000 current effects in roughly 40 wiki requests, in groups by first letter like NPCs (there are more
+        /// than one query can page through). Food's effects are left out: they're subobjects of the food's page, without
+        /// a description, and come from the items' data instead. So are unnamed effects ("((1019664))").
+        /// </summary>
+        public async Task<EffectCacheFile> DownloadEffectsAsync(int gameBuild, IProgress<string> progress, CancellationToken ct)
+        {
+            var starts = await AllTitleStartsAsync(ct);
+            int done = 0;
+            var groups = await Task.WhenAll(starts.Select(async start =>
+            {
+                var (pages, _) = await AskAllAsync(
+                    $"[[Has context::Effect]][[Is historical::false]][[~{start}*]]|?Has effect type|?Has game description|?Has game icon", ct);
+                progress.Report($"effects from the wiki, {Interlocked.Increment(ref done)} of {starts.Count} parts…");
+                return pages.Where(page => !page.Name.Contains("#") && !page.Name.StartsWith("((")).Select(page =>
+                {
+                    var printouts = page.Value["printouts"];
+                    return new WikiEffect
+                    {
+                        Title = page.Name,
+                        Type = PageNames(printouts?["Has effect type"]).FirstOrDefault(),
+                        Description = (printouts?["Has game description"] as JArray)?.FirstOrDefault()?.Value<string>(),
+                        Icon = WikiIconOf(printouts),
+                    };
+                }).ToList();
+            }));
+
+            var cache = new EffectCacheFile
+            {
+                Version = EffectCacheVersion,
+                GameBuild = gameBuild,
+                DownloadedUtc = DateTime.UtcNow,
+                Effects = groups.SelectMany(g => g).GroupBy(e => e.Title).Select(g => g.First()).ToList(),
+            };
+            Save(EffectsPath, cache);
+            return cache;
+        }
+
+        /// <summary>The wiki's description as plain text: links ("[[damage]]", "[[Might|might]]") as their text, templates and bold/italic quotes dropped.</summary>
+        public static string CleanWikiText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            text = Regex.Replace(text, @"\{\{[^{}]*\}\}", "");
+            text = Regex.Replace(text, @"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]", "$1");
+            text = text.Replace("'''", "").Replace("''", "");
+            return CleanDescription(text);
+        }
+
         private string MainPath(string language) => Path.Combine(_cacheDirectory, $"search-data-{language}.json");
         private string ItemsPath(string language) => Path.Combine(_cacheDirectory, $"search-items-{language}.json");
         private string NpcsPath => Path.Combine(_cacheDirectory, "search-npcs.json");
@@ -273,7 +362,7 @@ namespace mfdavies7.TyriaSearch
 
         // Null if there is no saved data, or it's from an older version of the module.
         public CacheFile LoadMain(string language) => Valid(Load<CacheFile>(MainPath(language)), MainCacheVersion);
-        public CacheFile LoadItems(string language) => Valid(Load<CacheFile>(ItemsPath(language)), CacheVersion);
+        public CacheFile LoadItems(string language) => Valid(Load<CacheFile>(ItemsPath(language)), ItemCacheVersion);
 
         public NpcCacheFile LoadNpcs()
         {
@@ -564,7 +653,7 @@ namespace mfdavies7.TyriaSearch
         /// </summary>
         private static void AddActivities(MapDto map, string mapName, List<SearchEntry> entries, HashSet<string> seen)
         {
-            void Add(EntryKind kind, string key, string name, string context, string icon, float[] coord)
+            void Add(EntryKind kind, string key, string name, string context, string icon, float[] coord, string description = null)
             {
                 if (coord?.Length != 2 || string.IsNullOrWhiteSpace(name) || !seen.Add(key)) return;
                 entries.Add(new SearchEntry
@@ -573,6 +662,7 @@ namespace mfdavies7.TyriaSearch
                     Id = key,
                     Name = name.Trim(),
                     Context = context,
+                    Description = CleanDescription(description),
                     Icon = icon,
                     MapId = map.Id,
                     X = coord[0],
@@ -600,7 +690,21 @@ namespace mfdavies7.TyriaSearch
             }
 
             foreach (var adventure in map.Adventures ?? new List<AdventureDto>())
-                Add(EntryKind.Adventure, $"adventure:{adventure.Id}", adventure.Name, mapName, AdventureIcon, adventure.Coord);
+                Add(EntryKind.Adventure, $"adventure:{adventure.Id}", adventure.Name, mapName, AdventureIcon, adventure.Coord, adventure.Description);
+        }
+
+        /// <summary>
+        /// The API's description as plain text: colour tags ("&lt;c=@flavor&gt;…&lt;/c&gt;") dropped, line breaks kept
+        /// as single newlines. Null if nothing is left.
+        /// </summary>
+        internal static string CleanDescription(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            text = Regex.Replace(text, @"<br\s*/?>", "\n", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"</?c(=[^>]*)?>", "", RegexOptions.IgnoreCase);
+            var lines = text.Split('\n').Select(l => Regex.Replace(l, @"\s+", " ").Trim()).Where(l => l.Length > 0);
+            text = string.Join("\n", lines);
+            return text.Length == 0 ? null : text;
         }
 
         /// <summary>
@@ -770,6 +874,7 @@ namespace mfdavies7.TyriaSearch
                     ChatLink = skill.ChatLink,
                     Name = skill.Name.Trim(),
                     Context = string.Join(" · ", context), // empty for NPC and monster skills
+                    Description = CleanDescription(skill.Description),
                     Icon = IconOrWiki(skill.Icon, skill.Id, skillIcons),
                 });
             }
@@ -790,6 +895,7 @@ namespace mfdavies7.TyriaSearch
                     ChatLink = new TraitChatLink { TraitId = trait.Id }.ToString(),
                     Name = trait.Name.Trim(),
                     Context = string.Join(" · ", context),
+                    Description = CleanDescription(trait.Description),
                     Icon = IconOrWiki(trait.Icon, trait.Id, traitIcons),
                 });
             }
@@ -815,7 +921,7 @@ namespace mfdavies7.TyriaSearch
             ForgetWikiIcons("Item");
             var cache = new CacheFile
             {
-                Version = CacheVersion,
+                Version = ItemCacheVersion,
                 Language = language,
                 GameBuild = gameBuild,
                 DownloadedUtc = DateTime.UtcNow,
@@ -845,7 +951,7 @@ namespace mfdavies7.TyriaSearch
             // A new file rather than changing the one the current index was built from.
             var updated = new CacheFile
             {
-                Version = CacheVersion,
+                Version = ItemCacheVersion,
                 Language = cache.Language,
                 GameBuild = gameBuild,
                 DownloadedUtc = cache.DownloadedUtc,
@@ -875,11 +981,43 @@ namespace mfdavies7.TyriaSearch
                     ChatLink = item.ChatLink,
                     Name = item.Name.Trim(),
                     Context = string.Join(" · ", context.Where(c => !string.IsNullOrEmpty(c))),
+                    Description = CleanDescription(item.Description),
                     Icon = IconOrWiki(item.Icon, item.Id, wikiIcons),
                     Rarity = item.Rarity,
                 });
+
+                // Food, utility and other consumables' effects, which the wiki has no pages for: listed under the
+                // consumable's name ("Omnomberry Bar", "Nourishment · 30 m"), with its chat link.
+                var effect = item.Details;
+                if (item.Type == "Consumable" && !string.IsNullOrWhiteSpace(effect?.Name))
+                {
+                    var effectContext = new List<string> { effect.Name.Trim() };
+                    if (effect.DurationMs > 0) effectContext.Add(EffectDuration(effect.DurationMs.Value));
+                    entries.Add(new SearchEntry
+                    {
+                        Kind = EntryKind.Effect,
+                        Id = $"{ItemEffectPrefix}{item.Id}",
+                        ChatLink = item.ChatLink,
+                        Name = item.Name.Trim(),
+                        Context = string.Join(" · ", effectContext),
+                        Description = CleanDescription(effect.Description),
+                        Icon = string.IsNullOrEmpty(effect.Icon) ? IconOrWiki(item.Icon, item.Id, wikiIcons) : effect.Icon,
+                    });
+                }
             }
             return entries;
+        }
+
+        /// <summary>Starts the id of a consumable's effect; the item id follows.</summary>
+        public const string ItemEffectPrefix = "item-effect:";
+
+        /// <summary>"30 m", "1 h", "1 h 30 m", "45 s", as the game shows an effect's duration.</summary>
+        public static string EffectDuration(long ms)
+        {
+            var time = TimeSpan.FromMilliseconds(ms);
+            if (time.TotalHours >= 1) return time.Minutes > 0 ? $"{(int)time.TotalHours} h {time.Minutes} m" : $"{(int)time.TotalHours} h";
+            if (time.TotalMinutes >= 1) return $"{(int)time.TotalMinutes} m";
+            return $"{(int)time.TotalSeconds} s";
         }
 
         /// <summary>"UpgradeComponent" → "Upgrade Component".</summary>
@@ -1140,6 +1278,31 @@ namespace mfdavies7.TyriaSearch
             }).ToList();
         }
 
+        // ---- Tooltip details ----
+
+        /// <summary>
+        /// Full skills, traits or items by id, for result tooltips: one request, made the first time a result's tooltip
+        /// shows. <paramref name="endpoint"/> is "skills", "traits" or "items".
+        /// </summary>
+        public Task<List<T>> GetByIdsAsync<T>(string endpoint, IEnumerable<int> ids, string language, CancellationToken ct) =>
+            GetAsync<List<T>>($"{Api}{endpoint}?ids={string.Join(",", ids)}&lang={language}", _apiSlots, ct);
+
+        /// <summary>
+        /// A skill's activation (cast) time in seconds, from the wiki: the API doesn't give it. Null if the wiki has
+        /// none; 0 for instant skills.
+        /// </summary>
+        public async Task<double?> SkillActivationTimeAsync(int skillId, CancellationToken ct)
+        {
+            var response = await AskAsync($"[[Has game id::{skillId}]][[Has context::Skill]]|?Has activation time|limit=10", ct);
+            // Game mode splits are subobjects with their own values; the first is the page's own.
+            foreach (var result in AskResults(response))
+            {
+                var value = (result.Value["printouts"]?["Has activation time"] as JArray)?.FirstOrDefault();
+                if (value?.Type == JTokenType.Integer || value?.Type == JTokenType.Float) return value.Value<double>();
+            }
+            return null;
+        }
+
         // ---- HTTP ----
 
         /// <summary>Retries rate limits (429), server errors (the API often returns 504) and timeouts.</summary>
@@ -1224,6 +1387,7 @@ namespace mfdavies7.TyriaSearch
         {
             [JsonProperty("id")] public string Id { get; set; }
             [JsonProperty("name")] public string Name { get; set; }
+            [JsonProperty("description")] public string Description { get; set; }
             [JsonProperty("coord")] public float[] Coord { get; set; }
         }
 
@@ -1248,6 +1412,7 @@ namespace mfdavies7.TyriaSearch
             [JsonProperty("name")] public string Name { get; set; }
             [JsonProperty("chat_link")] public string ChatLink { get; set; }
             [JsonProperty("icon")] public string Icon { get; set; }
+            [JsonProperty("description")] public string Description { get; set; }
             [JsonProperty("professions")] public List<string> Professions { get; set; }
             [JsonProperty("slot")] public string Slot { get; set; }
         }
@@ -1257,6 +1422,7 @@ namespace mfdavies7.TyriaSearch
             [JsonProperty("id")] public int Id { get; set; }
             [JsonProperty("name")] public string Name { get; set; }
             [JsonProperty("icon")] public string Icon { get; set; }
+            [JsonProperty("description")] public string Description { get; set; }
             [JsonProperty("specialization")] public int Specialization { get; set; }
             [JsonProperty("slot")] public string Slot { get; set; }
         }
@@ -1283,10 +1449,19 @@ namespace mfdavies7.TyriaSearch
             [JsonProperty("level")] public int Level { get; set; }
             [JsonProperty("chat_link")] public string ChatLink { get; set; }
             [JsonProperty("icon")] public string Icon { get; set; }
+            [JsonProperty("description")] public string Description { get; set; }
             [JsonProperty("details")] public ItemDetailsDto Details { get; set; }
         }
 
-        private sealed class ItemDetailsDto { [JsonProperty("type")] public string Type { get; set; } }
+        private sealed class ItemDetailsDto
+        {
+            [JsonProperty("type")] public string Type { get; set; }
+            // Consumables: the effect they give.
+            [JsonProperty("name")] public string Name { get; set; }
+            [JsonProperty("description")] public string Description { get; set; }
+            [JsonProperty("icon")] public string Icon { get; set; }
+            [JsonProperty("duration_ms")] public long? DurationMs { get; set; }
+        }
 
         private sealed class FileDto
         {

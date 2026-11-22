@@ -54,9 +54,10 @@ namespace mfdavies7.TyriaSearch
         private SettingEntry<bool> _searchItems;
         private SettingEntry<bool> _searchNpcs;
         private SettingEntry<bool> _searchEvents;
+        private SettingEntry<bool> _searchEffects;
         private SettingEntry<bool> _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits;
         private SettingEntry<bool> _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures;
-        private SettingEntry<bool> _searchWiki;
+        private SettingEntry<bool> _searchWiki, _wikiBelowResults;
         private SettingEntry<IconAction> _iconLeftClick;
         private SettingEntry<IconAction> _iconRightClick;
         private SettingEntry<bool> _registerCornerIcon;
@@ -73,6 +74,7 @@ namespace mfdavies7.TyriaSearch
         // Shown for results without an icon of their own, by name (npc, item, skill, location, page).
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
         private RegisteredCornerIcon _cornerIcon;
+        private SettingsUsedWhen _mapOpenSettings; // Keep Search Open / Zoom Out only matter when Show on Map opens the map
         private StandardWindow _settingsWindow;
         private SearchWindow _window;
         private MapMarker _mapMarker;
@@ -121,9 +123,12 @@ namespace mfdavies7.TyriaSearch
         // A refresh replaced mid-download can leave the flag set; only the latest refresh running counts.
         internal bool Downloading => _downloading && !_refreshTask.IsCompleted;
         internal bool SearchWiki => _searchWiki.Value;
+        internal bool WikiBelowResults => _wikiBelowResults.Value;
         internal ResultAction LeftClick => _leftClick.Value;
         internal ResultAction RightClick => _rightClick.Value;
         internal IReadOnlyList<string> Favourites => _favourites.Value;
+        /// <summary>Game-style tooltips for skill, trait and item results.</summary>
+        internal GameTooltips Tooltips { get; private set; }
         internal bool IsFavourite(SearchItem item) => _favourites.Value.Contains(item.Entry.Key);
         internal int MapMarkerCount => _mapMarker?.Targets.Count ?? 0;
 
@@ -168,7 +173,7 @@ namespace mfdavies7.TyriaSearch
                 () => "Defines the action of the corner icon when right clicked. Open Settings and Open Search close the window again if it's already open.");
             _learnPortals = settings.DefineSetting("LearnPortals", true,
                 () => "Learn New Portals",
-                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them.");
+                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them. Spots you choose Do Not Ask Again for This Location for are saved to ignored-portals.json; Forget Ignored Locations clears them.");
             // Never enabled: it's the key to press in the game, not a Blish HUD hotkey.
             _gameMapKey = settings.DefineSetting("GameMapKey", new KeyBinding(Microsoft.Xna.Framework.Input.Keys.M),
                 () => "Game's Map Key",
@@ -186,6 +191,9 @@ namespace mfdavies7.TyriaSearch
             _searchEvents = settings.DefineSetting("SearchEvents", true,
                 () => "Search Events",
                 () => "Include current events from the wiki, with where they start, their nearest waypoint and a map marker. Event names are in English. About 1 MB from the wiki (under a minute), downloaded again as often as Full Download Every (Days) says; also downloads English map data if neither search language is English.");
+            _searchEffects = settings.DefineSetting("SearchEffects", true,
+                () => "Search Effects",
+                () => "Include effects: boons, conditions, control effects, auras, transformations and every other effect from the wiki (names in English, about 1 MB, a few minutes, downloaded again as often as Full Download Every (Days) says), and the effects of food, utility items and other consumables, which come with the item data while Search Items is on.");
             _searchItems = settings.DefineSetting("SearchItems", true,
                 () => "Search Items",
                 () => "Include all 75,000 items. The first download takes a few minutes per language and about 10 MB of disk space each.");
@@ -204,7 +212,10 @@ namespace mfdavies7.TyriaSearch
                 () => "Include traits in the results. Off: traits aren't downloaded, but those already downloaded are kept for when you turn it back on.");
             _searchWiki = settings.DefineSetting("SearchWiki", true,
                 () => "Search the Wiki",
-                () => "In Everything, also ask the wiki once you pause typing, and list the pages it finds below the results here. In other categories, ask it when nothing here matches. Off: offer to open a wiki search in your browser instead, and leave the Wiki category out of the dropdown.");
+                () => "List the Wiki category in the dropdown, and in Everything also ask the wiki once you pause typing and list the pages it finds below the results here. A row to search the wiki in your browser is always offered when nothing matches.");
+            _wikiBelowResults = settings.DefineSetting("WikiBelowResults", true,
+                () => "List Wiki Pages Below Results",
+                () => "In every category (Everything included, but not Favourites), also ask the wiki once you pause typing, and list the pages it finds below the results here. Off: other categories only list the results here.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
                 () => "For Whisper to Yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
@@ -240,14 +251,15 @@ namespace mfdavies7.TyriaSearch
             new SettingsSection("Search Options", new SettingEntry[]
                 {
                     _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
-                    _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchItems, _searchSkills, _searchTraits, _searchWiki,
+                    _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchEffects, _searchItems, _searchSkills, _searchTraits, _searchWiki, _wikiBelowResults,
                 }),
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
-                ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData),
+                ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events, effects and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData),
                 ("Clear Cache", "Delete all saved search data and wiki icons, then download them again. Use it if Update Data doesn't fix missing or wrong results or icons. Searches keep working with the old data until the new data arrives. Learned portals are kept.", ClearCache)),
             new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _keepSearchOpenOnMap, _zoomOutMap, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
-                ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
+                ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals),
+                ("Forget Ignored Locations", "Ask again about portals at every spot you chose Do Not Ask Again for This Location for.", ForgetIgnoredLocations))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
             new SettingsSection("Chat", new SettingEntry[] { _overwriteUnsentText, _switchBackToSay, _keyDelayMs }))
         {
@@ -274,6 +286,7 @@ namespace mfdavies7.TyriaSearch
 
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
             _data = new Gw2Data(directory);
+            Tooltips = new GameTooltips(_data, () => _indexLanguages[0], IconFor, BundledIconFor, _unloading.Token);
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
             foreach (string name in KindIconNames.Concat(Gw2Data.BundledIconNames).Distinct())
@@ -285,10 +298,11 @@ namespace mfdavies7.TyriaSearch
                 _bundledPortals = Portal.Load(portals);
             _portalLearner = new PortalLearner(directory);
             _portalLearner.Changed += PortalLearner_Changed;
-            _portalReview = new PortalReview(AddLearnedPortal, DiscardLearnedPortal, _portalLearner.CancelReturn,
+            _portalReview = new PortalReview(AddLearnedPortal, DiscardLearnedPortal, IgnorePortal, _portalLearner.CancelReturn,
                 () => _portalPanelX.Value == NoPosition ? (Point?)null : new Point(_portalPanelX.Value, _portalPanelY.Value),
                 point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
             SetPortals();
+            _mapOpenSettings = new SettingsUsedWhen(() => _openMapOnShow.Value, _keepSearchOpenOnMap, _zoomOutMap).On(_openMapOnShow);
             _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
@@ -312,6 +326,7 @@ namespace mfdavies7.TyriaSearch
             _searchItems.SettingChanged += DataSetting_SettingChanged;
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
             _searchEvents.SettingChanged += DataSetting_SettingChanged;
+            _searchEffects.SettingChanged += DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged += SearchOption_SettingChanged;
             _searchWiki.SettingChanged += SearchWiki_SettingChanged;
             _showPortals.SettingChanged += MapDrawing_SettingChanged;
@@ -370,6 +385,25 @@ namespace mfdavies7.TyriaSearch
             if (!isReturn && _returnPromptMap == portal.Origin) _portalLearner.CancelReturn();
         }
 
+        private void IgnorePortal(Portal portal, bool isReturn)
+        {
+            _portalLearner.Ignore(portal);
+            DiscardLearnedPortal(portal, isReturn);
+            ScreenNotification.ShowNotification($"Tyria Search won't ask about this portal on {portal.Origin} again.");
+        }
+
+        private void ForgetIgnoredLocations()
+        {
+            int count = _portalLearner.Ignored.Count;
+            if (count == 0)
+            {
+                ScreenNotification.ShowNotification("Tyria Search has no ignored portal locations.");
+                return;
+            }
+            _portalLearner.ForgetIgnored();
+            ScreenNotification.ShowNotification($"Tyria Search will ask about {count} ignored portal location{(count == 1 ? "" : "s")} again.");
+        }
+
         private void ForgetLearnedPortals()
         {
             int count = _portalLearner.Learned.Count;
@@ -403,6 +437,7 @@ namespace mfdavies7.TyriaSearch
             _searchItems.SettingChanged -= DataSetting_SettingChanged;
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
             _searchEvents.SettingChanged -= DataSetting_SettingChanged;
+            _searchEffects.SettingChanged -= DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
             _searchWiki.SettingChanged -= SearchWiki_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
@@ -413,6 +448,7 @@ namespace mfdavies7.TyriaSearch
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
             _settingsWindow?.Dispose();
             _cornerIcon?.Dispose();
+            _mapOpenSettings?.Dispose();
             _mapMarker?.Dispose();
             _portalReview?.Dispose();
             _window?.Dispose();
@@ -629,6 +665,7 @@ namespace mfdavies7.TyriaSearch
             EntryKind.MasteryPoint => "mastery-tyria",
             EntryKind.Adventure => "adventure",
             EntryKind.Event => "event",
+            EntryKind.Effect => "effect",
             EntryKind.Npc => "npc",
             EntryKind.Item => "item",
             EntryKind.Skill => "skill",
@@ -650,7 +687,8 @@ namespace mfdavies7.TyriaSearch
             public readonly Dictionary<string, Gw2Data.CacheFile> Items = new Dictionary<string, Gw2Data.CacheFile>();
             public Gw2Data.NpcCacheFile Npcs;
             public Gw2Data.EventCacheFile Events;
-            public bool UseItems, UseNpcs, UseEvents;
+            public Gw2Data.EffectCacheFile Effects;
+            public bool UseItems, UseNpcs, UseEvents, UseEffects;
             // Skill, Trait: what's downloaded with the places. Left out, the saved ones are kept but not updated.
             public List<EntryKind> MainParts;
 
@@ -677,7 +715,7 @@ namespace mfdavies7.TyriaSearch
         {
             var data = new DataSet
             {
-                Languages = SearchLanguages(), UseItems = _searchItems.Value, UseNpcs = _searchNpcs.Value, UseEvents = _searchEvents.Value,
+                Languages = SearchLanguages(), UseItems = _searchItems.Value, UseNpcs = _searchNpcs.Value, UseEvents = _searchEvents.Value, UseEffects = _searchEffects.Value,
                 MainParts = new List<EntryKind>(),
             };
             if (_searchSkills.Value) data.MainParts.Add(EntryKind.Skill);
@@ -725,6 +763,7 @@ namespace mfdavies7.TyriaSearch
                 if (data.UseItems) foreach (string language in data.Languages) data.Items[language] = TryLoad(() => _data.LoadItems(language), $"{language} items");
                 if (data.UseNpcs) data.Npcs = TryLoad(_data.LoadNpcs, "NPCs");
                 if (data.UseEvents) data.Events = TryLoad(_data.LoadEvents, "events");
+                if (data.UseEffects) data.Effects = TryLoad(_data.LoadEffects, "effects");
                 Publish(data, ct);
 
                 int build = GameService.Gw2Mumble.Info.BuildId;
@@ -764,6 +803,7 @@ namespace mfdavies7.TyriaSearch
                 {
                     if (data.UseNpcs && data.Npcs != null && data.Npcs.GameBuild == 0 && build > 0) _data.StampNpcs(data.Npcs, build);
                     if (data.UseEvents && data.Events != null && data.Events.GameBuild == 0 && build > 0) _data.StampEvents(data.Events, build);
+                    if (data.UseEffects && data.Effects != null && data.Effects.GameBuild == 0 && build > 0) _data.StampEffects(data.Effects, build);
                 }
                 catch (Exception ex) when (!(ex is OperationCanceledException))
                 {
@@ -773,6 +813,8 @@ namespace mfdavies7.TyriaSearch
                     await Download("NPCs", null, async progress => data.Npcs = await _data.DownloadNpcsAsync(build, progress, ct));
                 if (data.UseEvents && (force || IsStale(data.Events?.DownloadedUtc, data.Events?.GameBuild ?? 0, build)))
                     await Download("events", null, async progress => data.Events = await _data.DownloadEventsAsync(build, progress, ct));
+                if (data.UseEffects && (force || IsStale(data.Effects?.DownloadedUtc, data.Effects?.GameBuild ?? 0, build)))
+                    await Download("effects", null, async progress => data.Effects = await _data.DownloadEffectsAsync(build, progress, ct));
 
                 // A game update only fetches the items it added.
                 if (data.UseItems)
@@ -839,6 +881,9 @@ namespace mfdavies7.TyriaSearch
                 entries = entries.Concat(WikiEntries.BuildNpcs(data.Npcs, places));
             if (data.UseEvents && data.Events != null && places != null)
                 entries = entries.Concat(WikiEntries.BuildEvents(data.Events, places));
+            // Effects have no place, so don't wait for the map data.
+            if (data.UseEffects && data.Effects != null)
+                entries = entries.Concat(WikiEntries.BuildEffects(data.Effects));
             if (places != null && _searchPortals.Value)
                 entries = entries.Concat(Portal.Entries(_portals, places));
             var kinds = SearchedKinds();
@@ -874,6 +919,7 @@ namespace mfdavies7.TyriaSearch
             EntryKind.Adventure => _searchAdventures.Value,
             EntryKind.Npc => _searchNpcs.Value,
             EntryKind.Event => _searchEvents.Value,
+            EntryKind.Effect => _searchEffects.Value,
             EntryKind.Item => _searchItems.Value,
             EntryKind.Skill => _searchSkills.Value,
             EntryKind.Trait => _searchTraits.Value,
@@ -894,6 +940,8 @@ namespace mfdavies7.TyriaSearch
             if (_searchAdventures.Value) kinds.Add(EntryKind.Adventure);
             if (_searchSkills.Value) kinds.Add(EntryKind.Skill);
             if (_searchTraits.Value) kinds.Add(EntryKind.Trait);
+            // Consumables' effects come with the items whether or not effects are searched.
+            if (_searchEffects.Value) kinds.Add(EntryKind.Effect);
             return kinds;
         }
 
@@ -1184,9 +1232,10 @@ namespace mfdavies7.TyriaSearch
 
         internal void OpenWiki(SearchItem item)
         {
-            // NPCs, events, portals and live results have English names; open that exact page.
+            // NPCs, events, portals, the wiki's effects and live results have English names; open that exact page.
             var kind = item.Entry.Kind;
-            if (kind == EntryKind.Npc || kind == EntryKind.Event || kind == EntryKind.WikiPage || kind == EntryKind.Portal)
+            if (kind == EntryKind.Npc || kind == EntryKind.Event || kind == EntryKind.WikiPage || kind == EntryKind.Portal
+                || (kind == EntryKind.Effect && item.Entry.Id?.StartsWith(WikiEntries.WikiEffectPrefix) == true))
             {
                 OpenWikiSearch(WikiTerm(item.Entry), "en");
                 return;
@@ -1262,6 +1311,8 @@ namespace mfdavies7.TyriaSearch
             entry.Kind == EntryKind.Vista && entry.Name == Gw2Data.UnnamedVistaName ? MapOf(entry)
             : entry.Kind == EntryKind.HeroChallenge || entry.Kind == EntryKind.MasteryPoint ? MapOf(entry)
             : entry.Kind == EntryKind.Portal ? entry.Name.Substring(entry.Name.IndexOf(Portal.NameSeparator) + Portal.NameSeparator.Length)
+            // The wiki's effect pages are titled "Guard! (effect)" when a skill has the same name.
+            : entry.Kind == EntryKind.Effect && entry.Id?.StartsWith(WikiEntries.WikiEffectPrefix) == true ? entry.Id.Substring(WikiEntries.WikiEffectPrefix.Length)
             : entry.Name;
 
         private static string MapOf(SearchEntry entry)
