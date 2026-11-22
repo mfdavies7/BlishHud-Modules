@@ -3,9 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>TyriaSearch</AssemblyName>
-    <RootNamespace>TyriaSearch</RootNamespace>
+    <AssemblyName>mfdavies7.bh.TyriaSearch</AssemblyName>
+    <RootNamespace>mfdavies7.TyriaSearch</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <BlishHUDModuleFileName>mfdavies7.bh.TyriaSearch</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>

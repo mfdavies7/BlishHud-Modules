@@ -9,12 +9,12 @@ using Blish_HUD.Input;
 using Blish_HUD.Modules;
 using Blish_HUD.Settings;
 using Gw2Sharp.ChatLinks;
-using ModuleShared;
-using static ModuleShared.ChatInput;
+using mfdavies7.ModuleShared;
+using static mfdavies7.ModuleShared.ChatInput;
 using Mouse = Blish_HUD.Controls.Intern.Mouse;
 using MouseButton = Blish_HUD.Controls.Intern.MouseButton;
 
-namespace WaypointPaste
+namespace mfdavies7.WaypointPaste
 {
     [Export(typeof(Module))]
     public class WaypointPasteModule : Module
@@ -31,6 +31,7 @@ namespace WaypointPaste
         private SettingEntry<bool> _useClipboardFirst;
         private SettingEntry<bool> _restoreClipboard;
         private SettingEntry<bool> _overwriteUnsentText;
+        private SettingEntry<bool> _switchBackToSay;
         private SettingEntry<bool> _autoClickLink;
         private SettingEntry<KeyBinding> _setClickPositionKey;
         private SettingEntry<int> _clickWaitMs;
@@ -60,6 +61,9 @@ namespace WaypointPaste
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
                 () => "If the chat box still holds text you typed but didn't send, delete it and paste the waypoint. The deleted text can't be recovered. Off: stop and leave your text in chat.");
+            _switchBackToSay = settings.DefineSetting("SwitchBackToSay", false,
+                () => "Switch to /s After Whisper",
+                () => "After the whisper is sent, switch chat back to /s, so the next message you type isn't also whispered to yourself. With Auto-Click Chat Link, this happens before the link is clicked. Off: chat stays on the whisper channel.");
             _autoClickLink = settings.DefineSetting("AutoClickChatLink", false,
                 () => "Auto-Click Chat Link",
                 () => "After the whisper is sent, click its link in chat for you. Save the spot to click with Set Click Position Hotkey first.");
@@ -124,12 +128,15 @@ namespace WaypointPaste
                 return;
             }
 
-            _ = PasteWaypointAsync();
+            // Set here, not in the task, so a second press can't start another paste before it runs.
+            _busy = true;
+            // Off Blish HUD's input thread: awaits would resume there, and if Blish HUD restarts that thread
+            // the paste never finishes and _busy stays set until reload.
+            _ = Task.Run(PasteWaypointAsync);
         }
 
         private async Task PasteWaypointAsync()
         {
-            _busy = true;
             // Restore even an empty clipboard, so the message typed last isn't left behind.
             bool restoreClipboard = false;
             string previousClipboard = null;
@@ -143,7 +150,8 @@ namespace WaypointPaste
                 string waypoint = _useClipboardFirst.Value && IsPointOfInterest(clipboard) ? clipboard.Trim() : _waypoint.Value.Trim();
                 if (!IsPointOfInterest(waypoint)) throw new AbortException("The saved waypoint isn't a valid chat code. Check Waypoint Chat Code in the settings.");
 
-                await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value, switchBackToSay: false);
+                // Switching back to /s is part of the whisper, so it always happens before the link is clicked.
+                await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value, _switchBackToSay.Value);
 
                 if (_autoClickLink.Value) await ClickChatLinkAsync(delay);
             }
@@ -158,8 +166,15 @@ namespace WaypointPaste
             }
             finally
             {
-                if (restoreClipboard)
-                    await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
+                try
+                {
+                    if (restoreClipboard)
+                        await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Couldn't restore the clipboard.");
+                }
                 _busy = false;
             }
         }

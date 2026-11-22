@@ -2,8 +2,9 @@
   "manifest_version": 1,
   "name": "Wiki Search",
   "namespace": "mfdavies7.wikisearch",
-  "package": "WikiSearch.dll",
+  "package": "mfdavies7.bh.WikiSearch.dll",
   "version": "0.1.0",
+  "url": "https://github.com/mfdavies7/BlishHud-Modules",
   "description": "Shift + left-click an item to open its Guild Wars 2 wiki page.",
   "contributors": [
     { "name": "mfdavies7" }

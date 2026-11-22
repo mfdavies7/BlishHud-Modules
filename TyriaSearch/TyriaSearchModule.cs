@@ -15,12 +15,12 @@ using Blish_HUD.Settings;
 using Gw2Sharp.WebApi;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using ModuleShared;
+using mfdavies7.ModuleShared;
 using Blish_HUD.Controls.Extern;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 using Mouse = Blish_HUD.Controls.Intern.Mouse;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     public enum SearchLanguage { None, English, German, French, Spanish }
 
@@ -40,6 +40,7 @@ namespace TyriaSearch
         private SettingEntry<KeyBinding> _openKey;
         private SettingEntry<KeyBinding> _clearMarkerKey;
         private SettingEntry<bool> _openMapOnShow;
+        private SettingEntry<bool> _keepSearchOpenOnMap;
         private SettingEntry<bool> _zoomOutMap;
         private SettingEntry<bool> _showPortals;
         private SettingEntry<bool> _showOnMinimap;
@@ -54,8 +55,10 @@ namespace TyriaSearch
         private SettingEntry<bool> _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures;
         private SettingEntry<bool> _searchWiki;
         private SettingEntry<bool> _swapIconClicks;
+        private SettingEntry<bool> _showCornerIcon;
         private SettingEntry<bool> _restoreClipboard;
         private SettingEntry<bool> _overwriteUnsentText;
+        private SettingEntry<bool> _switchBackToSay;
         private SettingEntry<int> _keyDelayMs;
         private SettingEntry<ResultAction> _leftClick;
         private SettingEntry<ResultAction> _rightClick;
@@ -96,6 +99,8 @@ namespace TyriaSearch
         private readonly CancellationTokenSource _unloading = new CancellationTokenSource();
         // Wiki icons by URL, loaded on first use (UI thread only), and saved under wiki-icons so each is downloaded once.
         private readonly Dictionary<string, AsyncTexture2D> _wikiIcons = new Dictionary<string, AsyncTexture2D>();
+        // Wiki icons dropped by Clear Cache, kept until unload since result rows may still draw them.
+        private readonly List<AsyncTexture2D> _discardedWikiIcons = new List<AsyncTexture2D>();
         private string _wikiIconDirectory;
         private CancellationTokenSource _refreshCancel;
         private Task _refreshTask = Task.CompletedTask;
@@ -103,7 +108,10 @@ namespace TyriaSearch
         private bool _busy;
 
         [ImportingConstructor]
-        public TyriaSearchModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters) { }
+        public TyriaSearchModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters)
+        {
+            Blocked.ModuleName = "Tyria Search";
+        }
 
         internal SearchIndex Index => _index;
         internal string Status => _status;
@@ -126,13 +134,16 @@ namespace TyriaSearch
         {
             _openKey = settings.DefineSetting("OpenKey", new KeyBinding(),
                 () => "Open Search Hotkey",
-                () => "Shows or hides the search window. You can also click the magnifier icon at the top left of the screen.");
+                () => "Shows or hides the search window. You can also right-click the magnifier icon at the top left of the screen.");
             _clearMarkerKey = settings.DefineSetting("ClearMarkerKey", new KeyBinding(),
                 () => "Clear Map Markers Hotkey",
                 () => "Removes all Show on Map markers from the world map. Works with the map open.");
             _openMapOnShow = settings.DefineSetting("OpenMapOnShow", true,
                 () => "Open Map After Show on Map",
                 () => "After Show on Map, open the world map if it isn't already open, by pressing Game's Map Key below. Chat must be closed.");
+            _keepSearchOpenOnMap = settings.DefineSetting("KeepSearchOpenOnMap", true,
+                () => "Keep Search Open on the Map",
+                () => "When Open Map After Show on Map opens the world map, leave the search window open. Off: hide it so it doesn't cover the map.");
             _zoomOutMap = settings.DefineSetting("ZoomOutMapOnShow", true,
                 () => "Zoom Out Map After Opening",
                 () => "When Open Map After Show on Map opens the world map, zoom it all the way out so the marker is on screen. Scrolls the mouse wheel, so keep the cursor over the game.");
@@ -142,9 +153,13 @@ namespace TyriaSearch
             _showOnMinimap = settings.DefineSetting("ShowOnMinimap", true,
                 () => "Show on the Minimap",
                 () => "Also draw Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of range sits at the minimap's edge, pointing the way.");
-            _swapIconClicks = settings.DefineSetting("SwapIconClicks", false,
+            _showCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
+                () => "Show Corner Icon",
+                () => "Show the Tyria Search icon at the top left of the screen. Off: open the search with Open Search Hotkey, and the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+            // A new key: "SwapIconClicks" meant the opposite, before left-click opened the settings by default.
+            _swapIconClicks = settings.DefineSetting("SwapIconClicksToSearch", false,
                 () => "Swap Icon Clicks",
-                () => "Left-click the Tyria Search icon at the top left for the settings, and right-click it for the search window.");
+                () => "Left-click the Tyria Search icon at the top left for the search window, and right-click it for the settings. Off: left-click for the settings, right-click for the search window.");
             _learnPortals = settings.DefineSetting("LearnPortals", true,
                 () => "Learn New Portals",
                 () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them.");
@@ -190,6 +205,9 @@ namespace TyriaSearch
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
                 () => "For Whisper to Yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
+            _switchBackToSay = settings.DefineSetting("SwitchBackToSay", true,
+                () => "Switch to /s After Whisper",
+                () => "After Whisper to Yourself, switch chat back to /s, so the next message you type isn't also whispered to yourself. Off: chat stays on the whisper channel.");
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
                 () => "Key Press Delay (ms)",
                 () => "Time between simulated key presses for Paste into Chat and Whisper to Yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
@@ -215,19 +233,20 @@ namespace TyriaSearch
 
         /// <summary>The settings, in sections, for the settings window.</summary>
         private IView SettingsView() => new SettingsWithValuesView(
-            new SettingsSection("Search Window", new SettingEntry[] { _openKey, _swapIconClicks, _leftClick, _rightClick }),
+            new SettingsSection("Search Window", new SettingEntry[] { _openKey, _showCornerIcon, _swapIconClicks, _leftClick, _rightClick }),
             new SettingsSection("Search Options", new SettingEntry[]
                 {
                     _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
                     _searchMasteryPoints, _searchAdventures, _searchNpcs, _searchEvents, _searchItems, _searchSkills, _searchTraits, _searchWiki,
                 }),
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
-                ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData)),
-            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _zoomOutMap, _gameMapKey, _showOnMinimap }),
+                ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData),
+                ("Clear Cache", "Delete all saved search data and wiki icons, then download them again. Use it if Update Data doesn't fix missing or wrong results or icons. Searches keep working with the old data until the new data arrives. Learned portals are kept.", ClearCache)),
+            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _keepSearchOpenOnMap, _zoomOutMap, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
-            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _keyDelayMs }))
+            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _switchBackToSay, _keyDelayMs }))
         {
             NamedValues = { [_fullDownloadDays] = new Dictionary<int, string> { [EveryUpdate] = "Every Update", [Never] = "Never" } },
         };
@@ -245,7 +264,8 @@ namespace TyriaSearch
             else OpenSettingsWindow();
         }
 
-        protected override void Initialize()
+        // Textures and bundled files are loaded here rather than in Initialize, as Blish HUD's module guide asks.
+        protected override Task LoadAsync()
         {
             if (_favourites.Value == null) _favourites.Value = new List<string>();
 
@@ -253,7 +273,7 @@ namespace TyriaSearch
             _data = new Gw2Data(directory);
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
-            foreach (string name in new[] { "npc", "item", "skill", "location", "page" }.Concat(Gw2Data.BundledIconNames))
+            foreach (string name in KindIconNames.Concat(Gw2Data.BundledIconNames).Distinct())
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
             _mapMarker = new MapMarker(ContinentOf, IconFor, BundledIconFor) { Parent = GameService.Graphics.SpriteScreen };
@@ -266,7 +286,7 @@ namespace TyriaSearch
                 () => _portalPanelX.Value == NoPosition ? (Point?)null : new Point(_portalPanelX.Value, _portalPanelY.Value),
                 point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
             SetPortals();
-            _cornerIcon = new CornerIcon { Icon = _icon }; // no name, so no tooltip
+            _cornerIcon = new CornerIcon { Icon = _icon, Visible = _showCornerIcon.Value }; // no name, so no tooltip
             _cornerIcon.Click += CornerIcon_Click;
             _cornerIcon.RightMouseButtonPressed += CornerIcon_RightMouseButtonPressed;
             // The same window as the search window, so the two look alike.
@@ -294,6 +314,8 @@ namespace TyriaSearch
             _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
+            _showCornerIcon.SettingChanged += ShowCornerIcon_SettingChanged;
+            return Task.CompletedTask;
         }
 
         protected override void OnModuleLoaded(EventArgs e)
@@ -385,6 +407,7 @@ namespace TyriaSearch
             _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
+            _showCornerIcon.SettingChanged -= ShowCornerIcon_SettingChanged;
             if (_cornerIcon != null)
             {
                 _cornerIcon.Click -= CornerIcon_Click;
@@ -397,20 +420,22 @@ namespace TyriaSearch
             _window?.Dispose();
             _icon?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
-            foreach (var texture in _wikiIcons.Values) texture.Texture?.Dispose();
+            foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons)) texture.Texture?.Dispose();
             _data?.Dispose();
         }
 
+        private void ShowCornerIcon_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _cornerIcon.Visible = e.NewValue;
+
         private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e)
         {
-            if (_swapIconClicks.Value) ToggleSettingsWindow();
-            else _window.Toggle();
+            if (_swapIconClicks.Value) _window.Toggle();
+            else ToggleSettingsWindow();
         }
 
         private void CornerIcon_RightMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e)
         {
-            if (_swapIconClicks.Value) _window.Toggle();
-            else ToggleSettingsWindow();
+            if (_swapIconClicks.Value) ToggleSettingsWindow();
+            else _window.Toggle();
         }
 
         // Search options that filter the downloaded data. Skills and traits are also left out of later downloads, and
@@ -423,6 +448,7 @@ namespace TyriaSearch
 
         private void SearchOption_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
         {
+            _window.UpdateCategories();
             // Turned on, the refresh shows what was saved, then downloads it if it was left out.
             if (e.NewValue && (sender == _searchSkills || sender == _searchTraits)) RequestRefresh(force: false, restart: true);
             else RebuildIndex();
@@ -437,7 +463,11 @@ namespace TyriaSearch
         private void ClearMarkerKey_Activated(object sender, EventArgs e) => ClearMapMarker();
         private void MapDrawing_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => ApplyMapDrawing();
         private void SecondLanguage_SettingChanged(object sender, ValueChangedEventArgs<SearchLanguage> e) => RequestRefresh(force: false, restart: true);
-        private void DataSetting_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => RequestRefresh(force: false, restart: true);
+        private void DataSetting_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
+        {
+            _window.UpdateCategories();
+            RequestRefresh(force: false, restart: true);
+        }
         // Shortening it may make saved data due now. Not restarted: dragging the slider changes it many times.
         private void FullDownloadDays_SettingChanged(object sender, ValueChangedEventArgs<int> e) => RequestRefresh(force: false, restart: false);
         private void Overlay_UserLocaleChanged(object sender, ValueEventArgs<System.Globalization.CultureInfo> e) => RequestRefresh(force: false, restart: true);
@@ -446,20 +476,55 @@ namespace TyriaSearch
 
         private void UpdateData() => RequestRefresh(force: true, restart: true);
 
+        /// <summary>
+        /// Deletes the saved search data and wiki icons, then downloads everything again. Stops a refresh that's running
+        /// and waits for it first, so it can't save its file again after the delete. The index in use stays until new
+        /// data is published.
+        /// </summary>
+        private void ClearCache()
+        {
+            // Rows may still be drawing these, so they're disposed at unload rather than now.
+            _discardedWikiIcons.AddRange(_wikiIcons.Values);
+            _wikiIcons.Clear();
+
+            _refreshCancel?.Cancel();
+            var cancel = _refreshCancel = new CancellationTokenSource();
+            _refreshForced = true;
+            var previous = _refreshTask;
+            _refreshTask = Task.Run(async () =>
+            {
+                try { await previous; }
+                catch (Exception) { /* it logged its own failure */ }
+                if (cancel.IsCancellationRequested) return; // a newer refresh replaced this one
+                try
+                {
+                    _data.ClearCache();
+                    if (System.IO.Directory.Exists(_wikiIconDirectory)) System.IO.Directory.Delete(_wikiIconDirectory, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    Blocked.Check(ex, _wikiIconDirectory);
+                    Logger.Warn(ex, "Couldn't delete all the saved search data.");
+                }
+                await RefreshAsync(force: true, cancel.Token);
+            });
+            ScreenNotification.ShowNotification("Tyria Search cleared its cache and is downloading the data again.");
+        }
+
         /// <summary>The result's own icon, else a bundled one for its kind.</summary>
         internal AsyncTexture2D IconFor(SearchEntry entry)
         {
             string icon = entry.Icon;
             if (icon?.StartsWith(SearchEntry.AssetIcon) == true && int.TryParse(icon.Substring(SearchEntry.AssetIcon.Length), out int assetId))
                 return AsyncTexture2D.FromAssetId(assetId);
-            if (icon?.StartsWith(Gw2Data.WikiImages) == true) return WikiIcon(icon);
-            // Skills, traits and items the wiki has no icon for either keep the API's missing icon.
-            if (!Gw2Data.IsMissingIcon(icon) && !icon.StartsWith(SearchEntry.BundledIcon))
-                return GameService.Content.GetRenderServiceTexture(icon);
-            return BundledIconFor(entry);
+            // Skills, traits and items the wiki has no icon for either keep the API's missing icon, and a few wiki
+            // pages give the wiki's placeholder: both show the kind's bundled icon.
+            if (Gw2Data.IsMissingIcon(icon) || icon.StartsWith(SearchEntry.BundledIcon)) return BundledIconFor(entry);
+            if (icon.StartsWith(Gw2Data.WikiImages)) return WikiIcon(icon);
+            return GameService.Content.GetRenderServiceTexture(icon);
         }
 
-        /// <summary>An icon from the wiki: empty until it has loaded from disk or downloaded, and stays empty if that fails.</summary>
+        /// <summary>An icon from the wiki: unswapped (so the bundled placeholder shows) until it has loaded from disk or downloaded, and stays so if that fails.</summary>
         private AsyncTexture2D WikiIcon(string url)
         {
             if (_wikiIcons.TryGetValue(url, out var texture)) return texture;
@@ -491,6 +556,7 @@ namespace TyriaSearch
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
+                Blocked.Check(ex, file);
                 Logger.Debug(ex, $"Couldn't load the wiki icon {url}.");
             }
         }
@@ -543,17 +609,40 @@ namespace TyriaSearch
         internal Texture2D BundledIconFor(SearchEntry entry)
         {
             string icon = entry.Icon;
-            string name = icon?.StartsWith(SearchEntry.BundledIcon) == true ? icon.Substring(SearchEntry.BundledIcon.Length) : entry.Kind switch
-            {
-                EntryKind.Npc => "npc",
-                EntryKind.Item => "item",
-                EntryKind.Skill => "skill",
-                EntryKind.Trait => "skill",
-                EntryKind.WikiPage => "page",
-                _ => "location",
-            };
-            return _fallbackIcons.TryGetValue(name, out var texture) ? texture : null;
+            string name = icon?.StartsWith(SearchEntry.BundledIcon) == true ? icon.Substring(SearchEntry.BundledIcon.Length) : KindIconName(entry.Kind);
+            return BundledIcon(name);
         }
+
+        /// <summary>A bundled icon by name (ref/textures/icon-&lt;name&gt;.png); null if it isn't loaded.</summary>
+        internal Texture2D BundledIcon(string name) => _fallbackIcons.TryGetValue(name, out var texture) ? texture : null;
+
+        /// <summary>
+        /// Each kind's default icon, ref/textures/icon-&lt;name&gt;.png: the game's map icon where there is one (from /v2/files,
+        /// or for zone portals Blish HUD's asset source), else a wiki one: the generic Skill.png and Trait.png, and the
+        /// menu bar's Inventory (items) and Contacts (NPCs) icons and the minimap's Compass icon (places). Wiki pages get a
+        /// plain drawn one.
+        /// </summary>
+        private static string KindIconName(EntryKind kind) => kind switch
+        {
+            EntryKind.Waypoint => "waypoint",
+            EntryKind.PointOfInterest => "poi",
+            EntryKind.Vista => "vista",
+            EntryKind.Portal => "portal",
+            EntryKind.RenownHeart => "heart",
+            EntryKind.HeroChallenge => "hero-challenge",
+            EntryKind.MasteryPoint => "mastery-tyria",
+            EntryKind.Adventure => "adventure",
+            EntryKind.Event => "event",
+            EntryKind.Npc => "npc",
+            EntryKind.Item => "item",
+            EntryKind.Skill => "skill",
+            EntryKind.Trait => "trait",
+            _ => "page",
+        };
+
+        // "location" is for wiki pages about places (see WikiEntries).
+        private static IEnumerable<string> KindIconNames =>
+            ((EntryKind[])Enum.GetValues(typeof(EntryKind))).Select(KindIconName).Append("location");
 
         // ---- Data ----
 
@@ -776,6 +865,25 @@ namespace TyriaSearch
                       + (_indexLanguages.Length > 1 ? $". Also matches {LanguageName(second)} names." : ".");
         }
 
+        /// <summary>Whether that kind's search option is on, so the search window lists its category.</summary>
+        internal bool Searches(EntryKind kind) => kind switch
+        {
+            EntryKind.Waypoint => _searchWaypoints.Value,
+            EntryKind.PointOfInterest => _searchPointsOfInterest.Value,
+            EntryKind.Vista => _searchVistas.Value,
+            EntryKind.Portal => _searchPortals.Value,
+            EntryKind.RenownHeart => _searchHearts.Value,
+            EntryKind.HeroChallenge => _searchHeroChallenges.Value,
+            EntryKind.MasteryPoint => _searchMasteryPoints.Value,
+            EntryKind.Adventure => _searchAdventures.Value,
+            EntryKind.Npc => _searchNpcs.Value,
+            EntryKind.Event => _searchEvents.Value,
+            EntryKind.Item => _searchItems.Value,
+            EntryKind.Skill => _searchSkills.Value,
+            EntryKind.Trait => _searchTraits.Value,
+            _ => true,
+        };
+
         /// <summary>The kinds of result the search options leave in. NPCs, events and items are left out of the data when off.</summary>
         private HashSet<EntryKind> SearchedKinds()
         {
@@ -915,7 +1023,7 @@ namespace TyriaSearch
             _ = RunChatActionAsync(delay => ChatActions.InsertIntoChatAsync(item.Entry.ChatLink, delay));
 
         internal void WhisperToSelf(SearchItem item) =>
-            _ = RunChatActionAsync(delay => ChatActions.WhisperToSelfAsync(item.Entry.ChatLink, delay, _overwriteUnsentText.Value));
+            _ = RunChatActionAsync(delay => ChatActions.WhisperToSelfAsync(item.Entry.ChatLink, delay, _overwriteUnsentText.Value, _switchBackToSay.Value));
 
         private async Task RunChatActionAsync(Func<int, Task> action)
         {
@@ -962,8 +1070,8 @@ namespace TyriaSearch
         {
             try
             {
-                _window.ReleaseFocus();
-                _window.Hide(); // it would cover the map
+                _window.ReleaseFocus(); // the map key must reach the game
+                if (!_keepSearchOpenOnMap.Value) _window.Hide(); // it would cover the map
                 await ChatActions.FocusGameAsync();
                 int delay = _keyDelayMs.Value;
                 await Task.Delay(delay);

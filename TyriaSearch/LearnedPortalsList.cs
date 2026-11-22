@@ -3,7 +3,7 @@ using System.Linq;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// The learned portals in the settings window, each with its destination and kind to edit and a Delete button.

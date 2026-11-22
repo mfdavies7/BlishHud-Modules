@@ -10,7 +10,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>The search box, category filter, status line and results list.</summary>
     internal sealed class SearchWindow : IDisposable
@@ -50,7 +50,8 @@ namespace TyriaSearch
 
         private const int MinLiveQueryLength = 3; // shorter queries match too much of the wiki to be useful
 
-        private readonly (string label, Func<SearchItem, bool> filter)[] _categories;
+        // kind: the search option that lists the category, or null for one that's always there.
+        private readonly (string label, Func<SearchItem, bool> filter, EntryKind? kind)[] _categories;
         private readonly TyriaSearchModule _module;
         private readonly StandardWindow _window;
         private readonly TextBox _query;
@@ -81,24 +82,24 @@ namespace TyriaSearch
         public SearchWindow(TyriaSearchModule module, Texture2D emblem)
         {
             _module = module;
-            _categories = new (string, Func<SearchItem, bool>)[]
+            _categories = new (string, Func<SearchItem, bool>, EntryKind?)[]
             {
-                (EverythingCategory, _ => true), // also asks the wiki, see ShowResults
-                ("Waypoints", i => i.Entry.Kind == EntryKind.Waypoint),
-                ("Points of Interest", i => i.Entry.Kind == EntryKind.PointOfInterest),
-                ("Vistas", i => i.Entry.Kind == EntryKind.Vista),
-                ("Portals", i => i.Entry.Kind == EntryKind.Portal),
-                ("Renown Hearts", i => i.Entry.Kind == EntryKind.RenownHeart),
-                ("Hero Challenges", i => i.Entry.Kind == EntryKind.HeroChallenge),
-                ("Mastery Points", i => i.Entry.Kind == EntryKind.MasteryPoint),
-                ("Adventures", i => i.Entry.Kind == EntryKind.Adventure),
-                ("NPCs", i => i.Entry.Kind == EntryKind.Npc),
-                ("Events", i => i.Entry.Kind == EntryKind.Event),
-                ("Items", i => i.Entry.Kind == EntryKind.Item),
-                ("Skills", i => i.Entry.Kind == EntryKind.Skill),
-                ("Traits", i => i.Entry.Kind == EntryKind.Trait),
-                (FavouritesCategory, module.IsFavourite),
-                (WikiCategory, _ => false), // searched live, see RunSearch
+                (EverythingCategory, _ => true, null), // also asks the wiki, see ShowResults
+                ("Waypoints", i => i.Entry.Kind == EntryKind.Waypoint, EntryKind.Waypoint),
+                ("Points of Interest", i => i.Entry.Kind == EntryKind.PointOfInterest, EntryKind.PointOfInterest),
+                ("Vistas", i => i.Entry.Kind == EntryKind.Vista, EntryKind.Vista),
+                ("Portals", i => i.Entry.Kind == EntryKind.Portal, EntryKind.Portal),
+                ("Renown Hearts", i => i.Entry.Kind == EntryKind.RenownHeart, EntryKind.RenownHeart),
+                ("Hero Challenges", i => i.Entry.Kind == EntryKind.HeroChallenge, EntryKind.HeroChallenge),
+                ("Mastery Points", i => i.Entry.Kind == EntryKind.MasteryPoint, EntryKind.MasteryPoint),
+                ("Adventures", i => i.Entry.Kind == EntryKind.Adventure, EntryKind.Adventure),
+                ("NPCs", i => i.Entry.Kind == EntryKind.Npc, EntryKind.Npc),
+                ("Events", i => i.Entry.Kind == EntryKind.Event, EntryKind.Event),
+                ("Items", i => i.Entry.Kind == EntryKind.Item, EntryKind.Item),
+                ("Skills", i => i.Entry.Kind == EntryKind.Skill, EntryKind.Skill),
+                ("Traits", i => i.Entry.Kind == EntryKind.Trait, EntryKind.Trait),
+                (FavouritesCategory, module.IsFavourite, null),
+                (WikiCategory, _ => false, null), // searched live, see RunSearch
             };
 
             // The window background and regions from the Blish HUD window guide.
@@ -131,7 +132,7 @@ namespace TyriaSearch
                 Location = new Point(width - categoryWidth, 2),
                 Width = categoryWidth,
             };
-            foreach (var (label, _) in _categories) _category.Items.Add(label);
+            UpdateCategories();
             _category.SelectedItem = _categories[0].label;
             _category.ValueChanged += (_, __) => RunSearch();
 
@@ -178,6 +179,20 @@ namespace TyriaSearch
         }
 
         public void Hide() => _window.Hide();
+
+        /// <summary>
+        /// Lists only the categories whose search option is on. If the selected one goes, Everything is selected instead.
+        /// </summary>
+        public void UpdateCategories()
+        {
+            var shown = _categories.Where(c => c.kind == null || _module.Searches(c.kind.Value)).Select(c => c.label).ToList();
+            if (shown.SequenceEqual(_category.Items)) return;
+
+            string selected = _category.SelectedItem;
+            _category.Items.Clear();
+            foreach (string label in shown) _category.Items.Add(label);
+            _category.SelectedItem = shown.Contains(selected) ? selected : EverythingCategory;
+        }
 
         private bool WikiSelected => _category.SelectedItem == WikiCategory;
 
@@ -384,7 +399,11 @@ namespace TyriaSearch
 
         private void AddBrowserRow(string query, int width, string subtitle)
         {
-            var row = new ResultRow(null) { Parent = _results, Width = width, Title = $"Search the wiki for \"{query}\"", Subtitle = subtitle };
+            var row = new ResultRow(null)
+            {
+                Parent = _results, Width = width, Title = $"Search the wiki for \"{query}\"", Subtitle = subtitle,
+                PlaceholderIcon = _module.BundledIcon("page"),
+            };
             row.Click += (_, __) => _module.OpenWikiSearch(query);
         }
 

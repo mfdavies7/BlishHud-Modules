@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Blish_HUD;
+using mfdavies7.ModuleShared;
 using Newtonsoft.Json;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// Notices portals the bundled list doesn't have, for the player to review; the ones they add are saved to
@@ -188,6 +189,7 @@ namespace TyriaSearch
             }
             catch (Exception ex)
             {
+                Blocked.Check(ex, _path);
                 Logger.Warn(ex, $"Couldn't save {_path}.");
             }
         }

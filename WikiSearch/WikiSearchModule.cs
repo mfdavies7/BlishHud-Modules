@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Controls;
@@ -12,10 +13,11 @@ using Blish_HUD.Settings;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using ModuleShared;
-using static ModuleShared.ChatInput;
+using mfdavies7.ModuleShared;
+using static mfdavies7.ModuleShared.ChatInput;
+using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
-namespace WikiSearch
+namespace mfdavies7.WikiSearch
 {
     public enum WikiLanguage { GameLanguage, English, German, French, Spanish }
 
@@ -26,10 +28,20 @@ namespace WikiSearch
 
         private const int HintCursorOffset = 25;
 
+        // GW2 copies a link in the chat box as its chat code; the [Name] form is matched too in case it doesn't.
+        private static readonly Regex LinkAtEnd = new Regex(@"\[[^\[\]]+\]$");
+
+        // Put on the clipboard before a copy; still there afterwards means nothing was selected.
+        private const string CopyCheckMarker = "mfdavies7.WikiSearch:empty-copy-check";
+
+        // Long enough to read the wiki page; after that the unsent text goes on the clipboard instead.
+        private const int RestoreWaitMs = 10 * 60 * 1000;
+
         private SettingEntry<WikiLanguage> _language;
         private SettingEntry<KeyBinding> _toggleKey;
         private SettingEntry<bool> _enabled;
         private SettingEntry<bool> _workWithChatOpen;
+        private SettingEntry<bool> _restoreUnsentText;
         private SettingEntry<bool> _workWithMapOpen;
         private SettingEntry<bool> _returnFocusToGame;
         private SettingEntry<bool> _restoreClipboard;
@@ -40,6 +52,7 @@ namespace WikiSearch
         private HintBox _hint;
         private Texture2D _hintIcon;
         private bool _busy;
+        private volatile bool _unloading;
 
         [ImportingConstructor]
         public WikiSearchModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters) { }
@@ -57,7 +70,10 @@ namespace WikiSearch
                 () => "Shift + left-click an item to open its wiki page. Turn off to link items in chat normally.");
             _workWithChatOpen = settings.DefineSetting("WorkWithChatOpen", false,
                 () => "Work When Chat Is Already Open",
-                () => "Also search when chat was open before the click. Everything typed in chat is searched, so only use this with an empty chat box. Off: shift-click links items into your message as usual.");
+                () => "Also search when chat was open before the click. Only the clicked item is searched; the rest of the chat box is deleted (see Restore Unsent Chat Text). Off: shift-click links items into your message as usual.");
+            _restoreUnsentText = settings.DefineSetting("RestoreUnsentText", true,
+                () => "Restore Unsent Chat Text",
+                () => "With Work When Chat Is Already Open on, put the text that was in chat back once you return to the game. If that isn't possible, it's left on the clipboard instead.");
             _workWithMapOpen = settings.DefineSetting("WorkWithMapOpen", true,
                 () => "Work When the Map Is Open",
                 () => "Also search when shift-clicking on the world map (for example waypoints). Off: shift-click links map points as usual.");
@@ -81,7 +97,8 @@ namespace WikiSearch
 
         public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
 
-        protected override void Initialize()
+        // Loads the hint's texture, so it's done here rather than in Initialize, as Blish HUD's module guide asks.
+        protected override Task LoadAsync()
         {
             _toggleKey.Value.Enabled = true;
             _toggleKey.Value.Activated += ToggleKey_Activated;
@@ -95,6 +112,7 @@ namespace WikiSearch
                 Visible = false,
             };
             _waitForShiftRelease.SettingChanged += WaitForShiftRelease_SettingChanged;
+            return Task.CompletedTask;
         }
 
         protected override void Update(GameTime gameTime)
@@ -119,6 +137,7 @@ namespace WikiSearch
 
         protected override void Unload()
         {
+            _unloading = true;
             _toggleKey.Value.Enabled = false;
             _toggleKey.Value.Activated -= ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
@@ -146,7 +165,12 @@ namespace WikiSearch
         {
             if (_busy || !IsShiftDown() || !CanSearchNow()) return;
 
-            _ = RunWikiSearchAsync();
+            // Set here, not in the task, so a second click can't start another search before it runs.
+            _busy = true;
+            bool chatWasOpen = GameService.Gw2Mumble.UI.IsTextInputFocused;
+            // Off Blish HUD's input thread: awaits would resume there, and if Blish HUD restarts that thread
+            // (e.g. when the browser takes focus) the search never finishes and _busy stays set until reload.
+            _ = Task.Run(() => RunWikiSearchAsync(chatWasOpen));
         }
 
         /// <summary>Shared by the click trigger and the hint, so the hint only shows when a click would search.</summary>
@@ -161,11 +185,11 @@ namespace WikiSearch
                    && (_workWithChatOpen.Value || !ui.IsTextInputFocused);
         }
 
-        private async Task RunWikiSearchAsync()
+        private async Task RunWikiSearchAsync(bool chatWasOpen)
         {
-            _busy = true;
             bool restoreClipboard = false;
             string previousClipboard = null;
+            string unsentText = null; // what the player had typed, once it has been deleted from chat
             try
             {
                 int delay = _keyDelayMs.Value;
@@ -178,20 +202,46 @@ namespace WikiSearch
 
                 restoreClipboard = _restoreClipboard.Value;
                 previousClipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync() ?? "";
-                await SetClipboardAsync(GetWikiCommand());
 
-                Stroke(VirtualKeyShort.HOME);
-                await Task.Delay(delay);
-                await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                if (chatWasOpen)
+                {
+                    var (link, otherText) = await TakeClickedLinkAsync(delay);
+                    if (link == null) return; // the click didn't add a link, so it wasn't on an item
+
+                    // All the text is selected, so the paste replaces it.
+                    await SetClipboardAsync(GetWikiCommand() + link);
+                    await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                    if (_restoreUnsentText.Value && otherText.Trim().Length > 0) unsentText = otherText;
+                }
+                else
+                {
+                    await SetClipboardAsync(GetWikiCommand());
+                    Stroke(VirtualKeyShort.HOME);
+                    await Task.Delay(delay);
+                    await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                }
                 Stroke(VirtualKeyShort.RETURN);
 
                 // Give GW2 time to read the command and open the browser before the clipboard changes back.
                 await Task.Delay(300);
 
+                // Now rather than at the end: putting unsent text back may wait until the player returns from the browser.
+                if (restoreClipboard)
+                {
+                    restoreClipboard = false;
+                    await RestoreClipboardAsync(previousClipboard);
+                }
+
                 if (_returnFocusToGame.Value)
                 {
                     await Task.Delay(500);
                     GameService.GameIntegration.Gw2Instance.FocusGw2();
+                }
+
+                if (unsentText != null)
+                {
+                    await RestoreUnsentTextAsync(unsentText, delay);
+                    unsentText = null;
                 }
             }
             catch (AbortException ex)
@@ -205,9 +255,112 @@ namespace WikiSearch
             }
             finally
             {
-                if (restoreClipboard)
-                    await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
+                if (unsentText != null)
+                {
+                    // Deleted from chat but not put back; the clipboard is the only place left to keep it.
+                    if (await ClipboardUtil.WindowsClipboardService.SetTextAsync(unsentText))
+                        ScreenNotification.ShowNotification("Wiki Search: your unsent chat text is on the clipboard. Paste it back into chat.", ScreenNotification.NotificationType.Warning);
+                    else
+                        Logger.Warn($"Couldn't put the unsent chat text back or on the clipboard: {unsentText}");
+                }
+                else if (restoreClipboard)
+                {
+                    await RestoreClipboardAsync(previousClipboard);
+                }
                 _busy = false;
+            }
+        }
+
+        private static async Task RestoreClipboardAsync(string text)
+        {
+            try
+            {
+                await ClipboardUtil.WindowsClipboardService.SetTextAsync(text);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Couldn't restore the clipboard.");
+            }
+        }
+
+        /// <summary>
+        /// GW2 put the link at the cursor, so the text up to the cursor ends with it. Copies that, then the whole chat box,
+        /// to split the link from the rest of the text. Returns a null link (and deselects) if the text before the cursor
+        /// doesn't end with a link; otherwise all the text is left selected.
+        /// </summary>
+        private static async Task<(string link, string otherText)> TakeClickedLinkAsync(int delay)
+        {
+            // Shift+Home selects from the cursor to the start. Stroke would lift Shift, so the keys are sent directly.
+            EnsureSafe(chatOpen: true);
+            Keyboard.Press(VirtualKeyShort.LSHIFT, true);
+            try
+            {
+                await Task.Delay(delay);
+                EnsureSafe(chatOpen: true);
+                Keyboard.Stroke(VirtualKeyShort.HOME, true);
+                await Task.Delay(delay);
+            }
+            finally
+            {
+                Keyboard.Release(VirtualKeyShort.LSHIFT, true);
+            }
+            await Task.Delay(delay);
+
+            string beforeCursor = await CopySelectionAsync(delay);
+            var match = LinkAtEnd.Match(beforeCursor ?? "");
+            if (!match.Success)
+            {
+                Stroke(VirtualKeyShort.END); // deselect, leave the text as it was
+                return (null, null);
+            }
+
+            await CtrlStrokeAsync(VirtualKeyShort.KEY_A, delay);
+            string all = await CopySelectionAsync(delay);
+            if (all == null || !all.StartsWith(beforeCursor, StringComparison.Ordinal))
+            {
+                Stroke(VirtualKeyShort.END);
+                throw new AbortException("Couldn't read the chat box, so nothing was searched. Try again, or raise Key Press Delay in the settings.");
+            }
+
+            return (match.Value, beforeCursor.Substring(0, match.Index) + all.Substring(beforeCursor.Length));
+        }
+
+        /// <summary>Copies the selected chat text (copy, not cut, so nothing is lost); null if nothing is selected.</summary>
+        private static async Task<string> CopySelectionAsync(int delay)
+        {
+            await SetClipboardAsync(CopyCheckMarker);
+            await CtrlStrokeAsync(VirtualKeyShort.KEY_C, delay);
+            await Task.Delay(delay);
+            string copied = await ClipboardUtil.WindowsClipboardService.GetTextAsync();
+            return string.IsNullOrEmpty(copied) || copied == CopyCheckMarker ? null : copied;
+        }
+
+        /// <summary>
+        /// The browser usually takes focus when the wiki opens, so this waits for the player to return to the game,
+        /// then opens chat and pastes the text back, leaving chat open.
+        /// </summary>
+        private async Task RestoreUnsentTextAsync(string text, int delay)
+        {
+            var gw2 = GameService.GameIntegration.Gw2Instance;
+            if (!await WaitAsync(() => _unloading || (gw2.IsInGame && gw2.Gw2HasFocus), RestoreWaitMs) || _unloading)
+                throw new AbortException("Couldn't put your unsent chat text back.");
+            await Task.Delay(300); // let the focus switch settle before sending keys
+
+            Stroke(VirtualKeyShort.RETURN, chatOpen: false);
+            if (!await WaitAsync(() => GameService.Gw2Mumble.UI.IsTextInputFocused, 1000))
+                throw new AbortException("Chat didn't open to put your unsent text back.");
+            await Task.Delay(delay);
+
+            string clipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync() ?? "";
+            await SetClipboardAsync(text);
+            try
+            {
+                await CtrlStrokeAsync(VirtualKeyShort.KEY_V, delay);
+                await Task.Delay(100);
+            }
+            finally
+            {
+                if (_restoreClipboard.Value) await RestoreClipboardAsync(clipboard);
             }
         }
 

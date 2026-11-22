@@ -6,7 +6,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
 
-namespace WikiSearch
+namespace mfdavies7.WikiSearch
 {
     /// <summary>
     /// Tooltip-style hint that follows the cursor: icon, gold title, description.

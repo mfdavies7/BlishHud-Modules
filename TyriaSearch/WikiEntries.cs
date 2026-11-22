@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Gw2Sharp.ChatLinks;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// Turns wiki data into search entries placed on the map: exact coordinates when the wiki has them, otherwise the
@@ -277,7 +277,7 @@ namespace TyriaSearch
                              "NPC" => "npc",
                              "Item" => "item",
                              "Skill" => "skill",
-                             "Trait" => "skill",
+                             "Trait" => "trait",
                              "Location" => "location",
                              _ => "page",
                          };

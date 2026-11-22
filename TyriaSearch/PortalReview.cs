@@ -5,7 +5,7 @@ using Blish_HUD;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// The panel at the top of the screen that asks about portals <see cref="PortalLearner"/> noticed, one at a time: the
@@ -114,7 +114,9 @@ namespace TyriaSearch
                 if (next != null) ShowCandidate(next, returnPrompt);
                 else if (returnPrompt != null) ShowReturnPrompt(returnPrompt);
             }
-            _panel.Visible = next != null || returnPrompt != null;
+            // Kept for later during loading screens and character select; it stays with the world map open.
+            bool inGame = GameService.GameIntegration.Gw2Instance.IsInGame;
+            _panel.Visible = inGame && (next != null || returnPrompt != null);
             Place();
         }
 

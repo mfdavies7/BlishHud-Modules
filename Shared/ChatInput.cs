@@ -4,7 +4,7 @@ using Blish_HUD;
 using Blish_HUD.Controls.Extern;
 using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
-namespace ModuleShared
+namespace mfdavies7.ModuleShared
 {
     /// <summary>Stops a simulated input sequence; the message is shown to the player.</summary>
     internal sealed class AbortException : Exception

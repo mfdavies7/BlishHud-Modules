@@ -11,10 +11,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Blish_HUD;
 using Gw2Sharp.ChatLinks;
+using mfdavies7.ModuleShared;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// Downloads searchable data from the GW2 API and the wiki, and keeps it in cache files:
@@ -72,7 +73,13 @@ namespace TyriaSearch
         // such as the ranger's Quake) point to: an unrelated mask, padded to 128x128 so it looks small.
         private const string MissingIconFile = "/62248.png";
 
-        public static bool IsMissingIcon(string icon) => string.IsNullOrEmpty(icon) || icon.EndsWith(MissingIconFile, StringComparison.Ordinal);
+        // The wiki's placeholder ("Under Construction") that a few pages give as their game icon, such as Damaged Skull.
+        private const string WikiMissingIconFile = "/Deleted_Item.png";
+
+        /// <summary>No icon, the API's missing icon or the wiki's placeholder: shown as the kind's bundled icon.</summary>
+        public static bool IsMissingIcon(string icon) => string.IsNullOrEmpty(icon)
+            || icon.EndsWith(MissingIconFile, StringComparison.Ordinal)
+            || icon.EndsWith(WikiMissingIconFile, StringComparison.Ordinal);
 
         /// <summary>Where the wiki serves its uploaded files; <see cref="WikiFileUrl"/> builds the rest.</summary>
         public const string WikiImages = "https://wiki.guildwars2.com/images/";
@@ -290,11 +297,44 @@ namespace TyriaSearch
         private void Save(string path, object value)
         {
             // Write then move, so a crash mid-write can't leave a broken cache behind.
-            Directory.CreateDirectory(_cacheDirectory);
-            string temp = path + ".tmp";
-            using (var writer = File.CreateText(temp)) Serializer.Serialize(writer, value);
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(temp, path);
+            try
+            {
+                Directory.CreateDirectory(_cacheDirectory);
+                string temp = path + ".tmp";
+                using (var writer = File.CreateText(temp)) Serializer.Serialize(writer, value);
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(temp, path);
+            }
+            catch (Exception ex)
+            {
+                Blocked.Check(ex, path);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Deletes every saved search data file (and any left half-written), and forgets the wiki icon lookups, so the
+        /// next download starts from nothing. Other files in the directory (learned portals) are left alone.
+        /// Don't call it while a download is running: that would save its file again.
+        /// </summary>
+        public void ClearCache()
+        {
+            lock (_wikiIconLookups)
+            {
+                _wikiIconLookups.Clear();
+                _wikiIconsClearedUtc.Clear();
+            }
+            if (!Directory.Exists(_cacheDirectory)) return;
+            foreach (string path in Directory.GetFiles(_cacheDirectory, "search-*.json")
+                         .Concat(Directory.GetFiles(_cacheDirectory, "search-*.json.tmp")))
+            {
+                try { File.Delete(path); }
+                catch (Exception ex)
+                {
+                    Blocked.Check(ex, path);
+                    throw;
+                }
+            }
         }
 
         // ---- Landmarks, skills and traits ----
@@ -587,13 +627,13 @@ namespace TyriaSearch
                     foreach (var result in AskResults(response))
                     {
                         var printouts = result.Value["printouts"];
-                        string file = PageNames(printouts?["Has game icon"]).FirstOrDefault();
-                        if (file == null) continue;
+                        string url = WikiIconOf(printouts);
+                        if (url == null) continue;
                         foreach (var value in printouts["Has game id"] as JArray ?? new JArray())
                         {
                             if (value.Type != JTokenType.Integer && value.Type != JTokenType.Float) continue;
                             int id = value.Value<int>();
-                            if (!found.ContainsKey(id)) found[id] = WikiFileUrl(file);
+                            if (!found.ContainsKey(id)) found[id] = url;
                         }
                     }
                 }
@@ -644,7 +684,7 @@ namespace TyriaSearch
                 foreach (var entry in saved.Entries ?? new List<SearchEntry>())
                 {
                     string context = entry.Kind == EntryKind.Skill ? "Skill" : entry.Kind == EntryKind.Trait ? "Trait" : null;
-                    bool wiki = entry.Icon?.StartsWith(WikiImages) == true;
+                    bool wiki = entry.Icon?.StartsWith(WikiImages) == true && !IsMissingIcon(entry.Icon);
                     if (context == null || !(wiki || IsMissingIcon(entry.Icon))) continue;
                     int? id = ChatLinkId(entry.ChatLink);
                     if (id != null && !_wikiIconLookups.ContainsKey((context, id.Value)))
@@ -1049,11 +1089,12 @@ namespace TyriaSearch
         private static List<string> PageNames(JToken values) =>
             (values as JArray)?.Select(v => v["fulltext"]?.Value<string>()).Where(s => !string.IsNullOrEmpty(s)).ToList() ?? new List<string>();
 
-        /// <summary>The "Has game icon" printout as a wiki image URL; null if the page has none.</summary>
+        /// <summary>The "Has game icon" printout as a wiki image URL; null if the page has none, or only the placeholder.</summary>
         private static string WikiIconOf(JToken printouts)
         {
             string file = PageNames(printouts?["Has game icon"]).FirstOrDefault();
-            return file == null ? null : WikiFileUrl(file);
+            string url = file == null ? null : WikiFileUrl(file);
+            return IsMissingIcon(url) ? null : url;
         }
 
         // ---- Live wiki search ----
@@ -1124,6 +1165,7 @@ namespace TyriaSearch
                 }
                 catch (Exception ex) when ((ex is HttpRequestException || ex is TaskCanceledException || ex is IOException) && !ct.IsCancellationRequested)
                 {
+                    Blocked.Check(ex);
                     failure = ex.Message;
                 }
                 finally

@@ -8,7 +8,7 @@ using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// Marks search results on the world map while the map is open, and on the minimap (compass) while it's closed
@@ -320,7 +320,8 @@ namespace TyriaSearch
             int size = (int)(IconSize * view.IconScale * (offScreen ? 0.8f : 1f + 0.15f * pulse));
 
             var icon = _iconFor(entry);
-            if (icon == null || !icon.HasTexture) icon = _placeholderFor(entry) ?? GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
+            // HasSwapped, not HasTexture: a downloading texture is a transparent pixel until it arrives.
+            if (icon == null || !icon.HasSwapped) icon = _placeholderFor(entry) ?? GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
 
             var iconRect = new Rectangle((int)pinned.X - size / 2, (int)pinned.Y - size / 2, size, size);
             var backing = Inflate(iconRect, view.Minimap ? 2 : 4);

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     // Values are saved in the cache files; only add new ones at the end.
     public enum EntryKind { Waypoint, PointOfInterest, Vista, Skill, Trait, Item, Npc, WikiPage, Portal, RenownHeart, HeroChallenge, MasteryPoint, Adventure, Event }

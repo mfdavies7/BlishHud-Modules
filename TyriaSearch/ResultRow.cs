@@ -4,7 +4,7 @@ using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>
     /// One search result. Drawn in a single control so clicks anywhere on the row reach it,
@@ -38,7 +38,8 @@ namespace TyriaSearch
             if (MouseOver) spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, bounds, HoverColor);
 
             var iconRect = new Rectangle(8, (Height - IconSize) / 2, IconSize, IconSize);
-            if (Icon != null && Icon.HasTexture) spriteBatch.DrawOnCtrl(this, Icon, iconRect);
+            // HasTexture is already true while downloading (it starts as a transparent pixel); HasSwapped means it arrived.
+            if (Icon != null && Icon.HasSwapped) spriteBatch.DrawOnCtrl(this, Icon, iconRect);
             else if (PlaceholderIcon != null) spriteBatch.DrawOnCtrl(this, PlaceholderIcon, iconRect);
 
             int textWidth = Width - TextLeft - 4;

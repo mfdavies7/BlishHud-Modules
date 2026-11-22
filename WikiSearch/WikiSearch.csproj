@@ -3,9 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>WikiSearch</AssemblyName>
-    <RootNamespace>WikiSearch</RootNamespace>
+    <AssemblyName>mfdavies7.bh.WikiSearch</AssemblyName>
+    <RootNamespace>mfdavies7.WikiSearch</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <BlishHUDModuleFileName>mfdavies7.bh.WikiSearch</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>

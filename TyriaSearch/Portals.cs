@@ -4,7 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace TyriaSearch
+namespace mfdavies7.TyriaSearch
 {
     /// <summary>What a portal is, which picks its map icon.</summary>
     internal enum PortalKind { Zone, AsuraGate, Dungeon, Raid, Fractal }
