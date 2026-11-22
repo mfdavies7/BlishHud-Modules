@@ -59,7 +59,7 @@ namespace mfdavies7.TyriaSearch
         private SettingEntry<bool> _searchWiki;
         private SettingEntry<IconAction> _iconLeftClick;
         private SettingEntry<IconAction> _iconRightClick;
-        private SettingEntry<bool> _showCornerIcon;
+        private SettingEntry<bool> _registerCornerIcon;
         private SettingEntry<bool> _overwriteUnsentText;
         private SettingEntry<bool> _switchBackToSay;
         private SettingEntry<int> _keyDelayMs;
@@ -72,7 +72,7 @@ namespace mfdavies7.TyriaSearch
         private Texture2D _icon;
         // Shown for results without an icon of their own, by name (npc, item, skill, location, page).
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
-        private CornerIcon _cornerIcon;
+        private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
         private SearchWindow _window;
         private MapMarker _mapMarker;
@@ -156,15 +156,16 @@ namespace mfdavies7.TyriaSearch
             _showOnMinimap = settings.DefineSetting("ShowOnMinimap", true,
                 () => "Show on the Minimap",
                 () => "Also draw Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of range sits at the minimap's edge, pointing the way.");
-            _showCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
-                () => "Show Corner Icon",
-                () => "Show the Tyria Search icon at the top left of the screen. Off: open the search with Open Search Hotkey, and the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+            // Saved under its old key, so the choice made with Show Corner Icon carries over.
+            _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
+                () => "Register Corner Icon",
+                () => "Whether the module should register a corner icon. Off: open the search with Open Search Hotkey, and the settings with Open Settings Window on the module's page in Blish HUD's settings.");
             _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
-                () => "Left-Click the Icon",
-                () => "What left-clicking the Tyria Search icon at the top left does. Open Settings and Open Search close the window again if it's already open.");
+                () => "Corner Icon Left Click Action",
+                () => "Defines the action of the corner icon when left clicked. Open Settings and Open Search close the window again if it's already open.");
             _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.OpenSearch,
-                () => "Right-Click the Icon",
-                () => "What right-clicking the Tyria Search icon at the top left does. Open Settings and Open Search close the window again if it's already open.");
+                () => "Corner Icon Right Click Action",
+                () => "Defines the action of the corner icon when right clicked. Open Settings and Open Search close the window again if it's already open.");
             _learnPortals = settings.DefineSetting("LearnPortals", true,
                 () => "Learn New Portals",
                 () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them.");
@@ -235,7 +236,7 @@ namespace mfdavies7.TyriaSearch
 
         /// <summary>The settings, in sections, for the settings window.</summary>
         private IView SettingsView() => new SettingsWithValuesView(
-            new SettingsSection("Search Window", new SettingEntry[] {_showCornerIcon, _iconLeftClick, _iconRightClick, _leftClick, _rightClick,  _openKey}),
+            new SettingsSection("Search Window", new SettingEntry[] { _registerCornerIcon,_iconLeftClick, _iconRightClick, _openKey, _leftClick, _rightClick }),
             new SettingsSection("Search Options", new SettingEntry[]
                 {
                     _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
@@ -288,9 +289,9 @@ namespace mfdavies7.TyriaSearch
                 () => _portalPanelX.Value == NoPosition ? (Point?)null : new Point(_portalPanelX.Value, _portalPanelY.Value),
                 point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
             SetPortals();
-            _cornerIcon = new CornerIcon { Icon = _icon, Visible = _showCornerIcon.Value }; // no name, so no tooltip
-            _cornerIcon.Click += CornerIcon_Click;
-            _cornerIcon.RightMouseButtonPressed += CornerIcon_RightMouseButtonPressed;
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+                () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
+                rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
             // The same window as the search window, so the two look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -317,7 +318,6 @@ namespace mfdavies7.TyriaSearch
             _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
-            _showCornerIcon.SettingChanged += ShowCornerIcon_SettingChanged;
             return Task.CompletedTask;
         }
 
@@ -387,7 +387,7 @@ namespace mfdavies7.TyriaSearch
             _window.Update();
             LearnPortals();
             _mapMarker.Size = GameService.Graphics.SpriteScreen.Size;
-            _cornerIcon.LoadingMessage = Downloading ? _status : null;
+            if (_cornerIcon.Icon != null) _cornerIcon.Icon.LoadingMessage = Downloading ? _status : null;
         }
 
         protected override void Unload()
@@ -411,12 +411,6 @@ namespace mfdavies7.TyriaSearch
             _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
-            _showCornerIcon.SettingChanged -= ShowCornerIcon_SettingChanged;
-            if (_cornerIcon != null)
-            {
-                _cornerIcon.Click -= CornerIcon_Click;
-                _cornerIcon.RightMouseButtonPressed -= CornerIcon_RightMouseButtonPressed;
-            }
             _settingsWindow?.Dispose();
             _cornerIcon?.Dispose();
             _mapMarker?.Dispose();
@@ -427,12 +421,6 @@ namespace mfdavies7.TyriaSearch
             foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons)) texture.Texture?.Dispose();
             _data?.Dispose();
         }
-
-        private void ShowCornerIcon_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _cornerIcon.Visible = e.NewValue;
-
-        private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e) => RunIconAction(_iconLeftClick.Value);
-
-        private void CornerIcon_RightMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e) => RunIconAction(_iconRightClick.Value);
 
         private void RunIconAction(IconAction action)
         {
@@ -626,9 +614,9 @@ namespace mfdavies7.TyriaSearch
 
         /// <summary>
         /// Each kind's default icon, ref/textures/icon-&lt;name&gt;.png: the game's map icon where there is one (from /v2/files,
-        /// or for zone portals Blish HUD's asset source), else a wiki one: the generic Skill.png and Trait.png, and the
-        /// menu bar's Inventory (items) and Contacts (NPCs) icons and the minimap's Compass icon (places). Wiki pages get a
-        /// plain drawn one.
+        /// or from Blish HUD's asset source: zone portals, the Hero panel's Skills and Traits tab icon for skills and
+        /// traits (asset 156720), and the menu bar's Inventory icon for items (asset 157098) and Contacts icon for NPCs
+        /// (asset 157112)), else a wiki one: the minimap's Compass icon (places). Wiki pages get a plain drawn one.
         /// </summary>
         private static string KindIconName(EntryKind kind) => kind switch
         {

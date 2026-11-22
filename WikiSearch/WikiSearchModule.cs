@@ -1,15 +1,19 @@
 using System;
+using System.ComponentModel;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Blish_HUD;
+using Blish_HUD.Content;
 using Blish_HUD.Controls;
 using Blish_HUD.Controls.Extern;
 using Blish_HUD.Graphics.UI;
 using Blish_HUD.Input;
 using Blish_HUD.Modules;
 using Blish_HUD.Settings;
+using Gw2Sharp.WebApi;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -20,6 +24,15 @@ using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 namespace mfdavies7.WikiSearch
 {
     public enum WikiLanguage { GameLanguage, English, German, French, Spanish }
+
+    /// <summary>What clicking the corner icon does.</summary>
+    public enum IconAction
+    {
+        [Description("Open Settings")] OpenSettings,
+        [Description("Toggle WikiSearch")] ToggleWikiSearch,
+        [Description("Open Wiki")] OpenWiki,
+        [Description("Nothing")] Nothing,
+    }
 
     [Export(typeof(Module))]
     public class WikiSearchModule : Module
@@ -43,9 +56,14 @@ namespace mfdavies7.WikiSearch
         private SettingEntry<int> _keyDelayMs;
         private SettingEntry<bool> _waitForShiftRelease;
         private SettingEntry<bool> _showHint;
+        private SettingEntry<bool> _registerCornerIcon;
+        private SettingEntry<IconAction> _iconLeftClick;
+        private SettingEntry<IconAction> _iconRightClick;
 
         private HintBox _hint;
-        private Texture2D _hintIcon;
+        private Texture2D _icon;
+        private RegisteredCornerIcon _cornerIcon;
+        private StandardWindow _settingsWindow;
         private bool _busy;
 
         [ImportingConstructor]
@@ -53,15 +71,25 @@ namespace mfdavies7.WikiSearch
 
         protected override void DefineSettings(SettingCollection settings)
         {
-            _language = settings.DefineSetting("Language", WikiLanguage.GameLanguage,
-                () => "Wiki Language",
-                () => "Which wiki to search. Game Language uses the wiki for your game client's language.");
+            // Saved under its old key, so the choice made with Show Corner Icon carries over.
+            _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
+                () => "Register Corner Icon",
+                () => "Whether the module should register a corner icon. Off: turn Wiki Search on or off with Toggle Hotkey, and open the settings with Open Settings Window on the module's page in Blish HUD's settings.");
+            _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
+                () => "Corner Icon Left Click Action",
+                () => "Defines the action of the corner icon when left clicked. Open Wiki opens the wiki's main page in Wiki Language.");
+            _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.ToggleWikiSearch,
+                () => "Corner Icon Right Click Action",
+                () => "Defines the action of the corner icon when right clicked. Open Wiki opens the wiki's main page in Wiki Language.");
             _toggleKey = settings.DefineSetting("ToggleKey", new KeyBinding(),
                 () => "Toggle Hotkey",
                 () => "Turns Wiki Search on or off.");
             _enabled = settings.DefineSetting("Enabled", true,
                 () => "Enabled",
                 () => "Shift + left-click an item to open its wiki page. Turn off to link items in chat normally.");
+            _language = settings.DefineSetting("Language", WikiLanguage.GameLanguage,
+                () => "Wiki Language",
+                () => "Which wiki to search. Game Language uses the wiki for your game client's language.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
                 () => "Also search when chat was already open before the click: if chat still holds text you typed but didn't send, delete it and search the item. The deleted text can't be recovered. Off: with chat already open, shift-click links items into your message as usual.");
@@ -83,23 +111,47 @@ namespace mfdavies7.WikiSearch
                 () => "Show a hint next to the cursor while Shift is held and a click would open the wiki.");
         }
 
-        public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
+        // Blish HUD's settings page only opens the module's own settings window.
+        public override IView GetSettingsView() => new OpenSettingsView(OpenSettingsWindow);
 
-        // Loads the hint's texture, so it's done here rather than in Initialize, as Blish HUD's module guide asks.
+        private IView SettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
+
+        private void OpenSettingsWindow()
+        {
+            if (_settingsWindow == null) return; // not loaded yet
+            if (!_settingsWindow.Visible) _settingsWindow.Show(SettingsView());
+            _settingsWindow.BringWindowToFront();
+        }
+
+        // Loads the icon's texture, so it's done here rather than in Initialize, as Blish HUD's module guide asks.
         protected override Task LoadAsync()
         {
             _toggleKey.Value.Enabled = true;
             _toggleKey.Value.Activated += ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed += Mouse_LeftMouseButtonPressed;
 
-            _hintIcon = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch.png");
-            _hint = new HintBox(_hintIcon, "Wiki Search", GetHintText())
+            _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch.png");
+            _hint = new HintBox(_icon, "Wiki Search", GetHintText())
             {
                 Parent = GameService.Graphics.SpriteScreen,
                 ZIndex = int.MaxValue,
                 Visible = false,
             };
             _waitForShiftRelease.SettingChanged += WaitForShiftRelease_SettingChanged;
+
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+                () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
+                rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
+            // The same window as the other modules' settings, so they look alike.
+            _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
+            {
+                Parent = GameService.Graphics.SpriteScreen,
+                Title = "Wiki Search",
+                Subtitle = "Settings",
+                Emblem = _icon,
+                Id = "mfdavies7.wikisearch.settings",
+                SavesPosition = true,
+            };
             return Task.CompletedTask;
         }
 
@@ -130,7 +182,66 @@ namespace mfdavies7.WikiSearch
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
             _waitForShiftRelease.SettingChanged -= WaitForShiftRelease_SettingChanged;
             _hint?.Dispose();
-            _hintIcon?.Dispose();
+            _hint = null;
+            _cornerIcon?.Dispose();
+            _cornerIcon = null;
+            _settingsWindow?.Dispose();
+            _settingsWindow = null;
+            _icon?.Dispose();
+            _icon = null;
+        }
+
+        private void RunIconAction(IconAction action)
+        {
+            switch (action)
+            {
+                case IconAction.OpenSettings:
+                    if (_settingsWindow.Visible) _settingsWindow.Hide();
+                    else OpenSettingsWindow();
+                    break;
+                case IconAction.ToggleWikiSearch:
+                    ToggleEnabled();
+                    break;
+                case IconAction.OpenWiki:
+                    OpenWikiMainPage();
+                    break;
+            }
+        }
+
+        private void OpenWikiMainPage()
+        {
+            try
+            {
+                Process.Start($"https://{GetWikiHost()}/");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Couldn't open the wiki.");
+                ScreenNotification.ShowNotification("Wiki Search: Couldn't open the wiki in your browser.", ScreenNotification.NotificationType.Warning);
+            }
+        }
+
+        /// <summary>The wiki for Wiki Language; Game Language uses Blish HUD's language, the closest to the game's it knows.</summary>
+        private string GetWikiHost()
+        {
+            var language = _language.Value;
+            if (language == WikiLanguage.GameLanguage)
+            {
+                language = GameService.Overlay.UserLocale.Value switch
+                {
+                    Locale.German => WikiLanguage.German,
+                    Locale.French => WikiLanguage.French,
+                    Locale.Spanish => WikiLanguage.Spanish,
+                    _ => WikiLanguage.English,
+                };
+            }
+            return language switch
+            {
+                WikiLanguage.German => "wiki-de.guildwars2.com",
+                WikiLanguage.French => "wiki-fr.guildwars2.com",
+                WikiLanguage.Spanish => "wiki-es.guildwars2.com",
+                _ => "wiki.guildwars2.com",
+            };
         }
 
         private void WaitForShiftRelease_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
@@ -142,7 +253,9 @@ namespace mfdavies7.WikiSearch
             ? "Click an item to open its wiki page.\nRelease Shift after clicking."
             : "Click an item to open its wiki page.";
 
-        private void ToggleKey_Activated(object sender, EventArgs e)
+        private void ToggleKey_Activated(object sender, EventArgs e) => ToggleEnabled();
+
+        private void ToggleEnabled()
         {
             _enabled.Value = !_enabled.Value;
             ScreenNotification.ShowNotification($"Wiki Search {(_enabled.Value ? "enabled" : "disabled")}.");

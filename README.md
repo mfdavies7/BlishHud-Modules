@@ -13,6 +13,10 @@ Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scra
 
 ### Settings
 
+The settings are in their own window. Click the Wiki Search icon at the top left to open or close it (by default; see Corner Icon Left Click Action), or press **Open Settings Window** on the module's page in Blish HUD's settings.
+
+- **Register Corner Icon** (on) – register the Wiki Search icon at the top left. Off: the icon is removed and the two click action settings are disabled.
+- **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Toggle WikiSearch) – Open Settings opens or closes the settings window; Toggle WikiSearch switches Enabled like the hotkey; Open Wiki opens the wiki's main page in Wiki Language; Nothing ignores the click.
 - **Wiki Language** – Game Language, English, German, French or Spanish.
 - **Toggle Hotkey** – switches the Enabled setting on or off.
 - **Enabled** (on) – turn it off to shift-click items into chat normally.
@@ -25,6 +29,8 @@ Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scra
 
 The hint can't tell whether the cursor is over an item; Blish HUD and GW2 don't expose that.
 
+The icon (`WikiSearch/ref/textures/WikiSearch.png`) is the same one the hint shows.
+
 ## Waypoint Paste
 
 Press a hotkey, or click the waypoint icon at the top left, to whisper a waypoint chat link to your own character. The link shows up in chat, ready to click or share. Unless Switch to /s After Whisper is on, chat stays on the whisper channel afterwards, so a message you type next is also whispered to yourself.
@@ -32,8 +38,10 @@ Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from s
 
 ### Settings
 
-- **Show Corner Icon** (on) – show the Waypoint Paste icon at the top left.
-- **Left-Click the Icon** (Open Settings) and **Right-Click the Icon** (Paste and Click Waypoint) – Open Settings opens or closes a settings window; Paste Waypoint whispers the waypoint like the hotkey, without clicking the link; Paste and Click Waypoint also clicks the link, but only when Auto-Click Chat Link is on; Nothing ignores the click.
+The settings are in their own window. Click the Waypoint Paste icon at the top left to open or close it (by default; see Corner Icon Left Click Action), or press **Open Settings Window** on the module's page in Blish HUD's settings.
+
+- **Register Corner Icon** (on) – register the Waypoint Paste icon at the top left. Off: the icon is removed and the two click action settings are disabled.
+- **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Paste and Click Waypoint) – Open Settings opens or closes the settings window; Paste Waypoint whispers the waypoint like the hotkey, without clicking the link; Paste and Click Waypoint also clicks the link, but only when Auto-Click Chat Link is on; Nothing ignores the click.
 - **Paste Waypoint Hotkey** – unset by default. Only works in game with chat closed; with chat open it asks you to close it first. It stops and tells you why if you alt-tab, chat closes, or a loading screen starts partway through.
 - **Waypoint Chat Code** (`[&BCAJAAA=]`) – shift-click a waypoint on the map to get its code. Invalid codes show a warning instead of sending.
 - **Use Copied Waypoint First** (on) – if your clipboard holds a waypoint, point of interest or vista code, paste that instead.
@@ -68,7 +76,7 @@ The hint icon (`WikiSearch/ref/textures/WikiSearch.png`) is from [KenediaDev's T
 Search waypoints, points of interest, vistas, renown hearts, hero challenges, mastery points, adventures, NPCs, events, items, skills and traits by name, map or chat code, then copy, paste or whisper their chat links, or mark them on the map.
 Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; written from scratch.
 
-Open it by right-clicking the magnifier icon at the top left (by default; see Right-Click the Icon) or with the hotkey, and type. Results update as you type, and a map or area name lists its landmarks. Under each result is what it is, then for anything on the map its area and map ("Waypoint · Shaemoor Fields · Queensdale"), followed by details such as level or services.
+Open it by right-clicking the magnifier icon at the top left (by default; see Corner Icon Right Click Action) or with the hotkey, and type. Results update as you type, and a map or area name lists its landmarks. Under each result is what it is, then for anything on the map its area and map ("Waypoint · Shaemoor Fields · Queensdale"), followed by details such as level or services.
 
 - **Click** a result to copy its chat link (changeable in settings). For an NPC, that's the waypoint nearest to them.
 - **Enter** copies the top result, closes the window and returns to the game, ready to paste.
@@ -97,11 +105,11 @@ Results are searchable as each part arrives. **Update Data** in the settings dow
 
 ### Settings
 
-The settings are in their own window, in sections (Search Window, Search Options, Search Data, World Map, Portals, Chat). Click the Tyria Search icon at the top left to open or close it (by default; see Left-Click the Icon), or press **Open Settings Window** on the module's page in Blish HUD's settings.
+The settings are in their own window, in sections (Search Window, Search Options, Search Data, World Map, Portals, Chat). Click the Tyria Search icon at the top left to open or close it (by default; see Corner Icon Left Click Action), or press **Open Settings Window** on the module's page in Blish HUD's settings.
 
 - **Open Search Hotkey** – unset by default.
-- **Show Corner Icon** (on) – show the Tyria Search icon at the top left. Off: open the search with the hotkey and the settings from the module's page in Blish HUD's settings.
-- **Left-Click the Icon** (Open Settings) and **Right-Click the Icon** (Open Search) – what clicking the Tyria Search icon does: Open Settings opens or closes the settings window, Open Search opens or closes the search window, Nothing ignores the click.
+- **Register Corner Icon** (on) – register the Tyria Search icon at the top left. Off: the icon is removed and the two click action settings are disabled; open the search with the hotkey and the settings from the module's page in Blish HUD's settings.
+- **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Open Search) – what clicking the Tyria Search icon does: Open Settings opens or closes the settings window, Open Search opens or closes the search window, Nothing ignores the click.
 - **Second Search Language** (None) – names are shown in Blish HUD's language; searches also match names in this language. None turns it off.
 - **Full Download Every (Days)** (30, Every Update, 7–365 or Never) – how often all search data is downloaded again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. At the lowest setting, Every Update, everything (including NPCs and events) is downloaded again after each game update instead. At the highest, Never, nothing is downloaded again except what game updates add and anything missing; NPCs and events then stay as first downloaded until you press **Update Data**.
 - **Open Map After Show on Map** (on) – opens the world map after Show on Map, if it isn't open already.

@@ -55,14 +55,14 @@ namespace mfdavies7.WaypointPaste
         private SettingEntry<int> _clickY;
         private SettingEntry<bool> _showClickPosition;
         private SettingEntry<int> _keyDelayMs;
-        private SettingEntry<bool> _showCornerIcon;
+        private SettingEntry<bool> _registerCornerIcon;
         private SettingEntry<IconAction> _iconLeftClick;
         private SettingEntry<IconAction> _iconRightClick;
 
         private bool _busy;
 
         private Texture2D _icon;
-        private CornerIcon _cornerIcon;
+        private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
 
         private ClickMarker _clickMarker;
@@ -75,15 +75,16 @@ namespace mfdavies7.WaypointPaste
 
         protected override void DefineSettings(SettingCollection settings)
         {
-            _showCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
-                () => "Show Corner Icon",
-                () => "Show the Waypoint Paste icon at the top left of the screen. Off: paste with Paste Waypoint Hotkey, and change settings on the module's page in Blish HUD's settings.");
+            // Saved under its old key, so the choice made with Show Corner Icon carries over.
+            _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
+                () => "Register Corner Icon",
+                () => "Whether the module should register a corner icon. Off: paste with Paste Waypoint Hotkey, and open the settings with Open Settings Window on the module's page in Blish HUD's settings.");
             _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
-                () => "Left-Click the Icon",
-                () => "What left-clicking the Waypoint Paste icon at the top left does. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
+                () => "Corner Icon Left Click Action",
+                () => "Defines the action of the corner icon when left clicked. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
             _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.PasteAndClickWaypoint,
-                () => "Right-Click the Icon",
-                () => "What right-clicking the Waypoint Paste icon at the top left does. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
+                () => "Corner Icon Right Click Action",
+                () => "Defines the action of the corner icon when right clicked. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
             _pasteKey = settings.DefineSetting("PasteKey", new KeyBinding(),
                 () => "Paste Waypoint Hotkey",
                 () => "Whispers the waypoint to your own character, so its link shows up in chat, ready to click or share.");
@@ -128,18 +129,26 @@ namespace mfdavies7.WaypointPaste
             _keyDelayMs.SetRange(20, 250);
         }
 
-        public override IView GetSettingsView() => SettingsView();
+        // Blish HUD's settings page only opens the module's own settings window.
+        public override IView GetSettingsView() => new OpenSettingsView(OpenSettingsWindow);
 
         private IView SettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
+
+        private void OpenSettingsWindow()
+        {
+            if (_settingsWindow == null) return; // not loaded yet
+            if (!_settingsWindow.Visible) _settingsWindow.Show(SettingsView());
+            _settingsWindow.BringWindowToFront();
+        }
 
         // Textures are loaded here rather than in Initialize, as Blish HUD's module guide asks.
         protected override Task LoadAsync()
         {
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste.png");
-            _cornerIcon = new CornerIcon { Icon = _icon, Visible = _showCornerIcon.Value }; // no name, so no tooltip
-            _cornerIcon.Click += CornerIcon_Click;
-            // On release, not press: the button mustn't still be held while keys are typed and the link is clicked.
-            _cornerIcon.RightMouseButtonReleased += CornerIcon_RightMouseButtonReleased;
+            // Right-click on release, not press: the button mustn't still be held while keys are typed and the link is clicked.
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+                () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
+                rightClickOnRelease: true, _iconLeftClick, _iconRightClick);
             // The same window as Tyria Search's settings, so the two look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -150,15 +159,8 @@ namespace mfdavies7.WaypointPaste
                 Id = "mfdavies7.waypointpaste.settings",
                 SavesPosition = true,
             };
-            _showCornerIcon.SettingChanged += ShowCornerIcon_SettingChanged;
             return Task.CompletedTask;
         }
-
-        private void ShowCornerIcon_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _cornerIcon.Visible = e.NewValue;
-
-        private void CornerIcon_Click(object sender, MouseEventArgs e) => RunIconAction(_iconLeftClick.Value);
-
-        private void CornerIcon_RightMouseButtonReleased(object sender, MouseEventArgs e) => RunIconAction(_iconRightClick.Value);
 
         private void RunIconAction(IconAction action)
         {
@@ -166,7 +168,7 @@ namespace mfdavies7.WaypointPaste
             {
                 case IconAction.OpenSettings:
                     if (_settingsWindow.Visible) _settingsWindow.Hide();
-                    else _settingsWindow.Show(SettingsView());
+                    else OpenSettingsWindow();
                     break;
                 case IconAction.PasteWaypoint:
                     StartPaste(click: false, fromIcon: true);
@@ -225,14 +227,8 @@ namespace mfdavies7.WaypointPaste
             _clickY.SettingChanged -= ClickPosition_SettingChanged;
             _clickMarker?.Dispose();
             _clickMarker = null;
-            _showCornerIcon.SettingChanged -= ShowCornerIcon_SettingChanged;
-            if (_cornerIcon != null)
-            {
-                _cornerIcon.Click -= CornerIcon_Click;
-                _cornerIcon.RightMouseButtonReleased -= CornerIcon_RightMouseButtonReleased;
-                _cornerIcon.Dispose();
-                _cornerIcon = null;
-            }
+            _cornerIcon?.Dispose();
+            _cornerIcon = null;
             _settingsWindow?.Dispose();
             _settingsWindow = null;
             _icon?.Dispose();
