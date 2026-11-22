@@ -15,13 +15,24 @@ namespace mfdavies7.ModuleShared
     {
         private readonly SettingEntry<bool> _register;
         private readonly SettingEntry[] _clickSettings;
-        private readonly Texture2D _texture;
+        private Texture2D _texture;
         private readonly Action _leftClick;
         private readonly Action _rightClick;
         private readonly bool _rightClickOnRelease;
 
         /// <summary>The icon while it's registered; null otherwise.</summary>
         public CornerIcon Icon { get; private set; }
+
+        /// <summary>The icon's picture; kept while unregistered, so the icon comes back with the latest one.</summary>
+        public Texture2D Texture
+        {
+            get => _texture;
+            set
+            {
+                _texture = value;
+                if (Icon != null) Icon.Icon = value;
+            }
+        }
 
         /// <param name="rightClickOnRelease">Run the right-click action when the button is released rather than pressed.</param>
         /// <param name="clickSettings">Settings that only matter with the icon registered; disabled while it isn't.</param>

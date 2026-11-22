@@ -9,7 +9,7 @@ Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scra
 
 The settings are in their own window. Click the Wiki Search icon at the top left to open or close it (by default; see Corner Icon Left Click Action), or press **Open Settings Window** on the module's page in Blish HUD's settings.
 
-- **Register Corner Icon** (on) – register the Wiki Search icon at the top left. Off: the icon is removed and the two click action settings are disabled.
+- **Register Corner Icon** (on) – register the Wiki Search icon at the top left. The icon is greyed out while Enabled is off, so it shows whether Wiki Search is on. Off: the icon is removed and the two click action settings are disabled.
 - **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Toggle WikiSearch) – Open Settings opens or closes the settings window; Toggle WikiSearch switches Enabled like the hotkey; Open Wiki opens the wiki's main page in Wiki Language; Nothing ignores the click.
 - **Wiki Language** – Game Language, English, German, French or Spanish.
 - **Toggle Hotkey** – switches the Enabled setting on or off.

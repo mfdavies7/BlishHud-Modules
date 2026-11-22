@@ -62,6 +62,7 @@ namespace mfdavies7.WikiSearch
 
         private HintBox _hint;
         private Texture2D _icon;
+        private Texture2D _iconDisabled;
         private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
         private bool _busy;
@@ -139,9 +140,12 @@ namespace mfdavies7.WikiSearch
             };
             _waitForShiftRelease.SettingChanged += WaitForShiftRelease_SettingChanged;
 
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+            // Greyed out while Wiki Search is off, so the corner icon shows whether it's on.
+            _iconDisabled = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchDisabled.png");
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, CornerIconTexture(),
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
+            _enabled.SettingChanged += Enabled_SettingChanged;
             // The same window as the other modules' settings, so they look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -181,6 +185,7 @@ namespace mfdavies7.WikiSearch
             _toggleKey.Value.Activated -= ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
             _waitForShiftRelease.SettingChanged -= WaitForShiftRelease_SettingChanged;
+            _enabled.SettingChanged -= Enabled_SettingChanged;
             _hint?.Dispose();
             _hint = null;
             _cornerIcon?.Dispose();
@@ -189,6 +194,15 @@ namespace mfdavies7.WikiSearch
             _settingsWindow = null;
             _icon?.Dispose();
             _icon = null;
+            _iconDisabled?.Dispose();
+            _iconDisabled = null;
+        }
+
+        private Texture2D CornerIconTexture() => _enabled.Value ? _icon : _iconDisabled;
+
+        private void Enabled_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
+        {
+            _cornerIcon.Texture = CornerIconTexture();
         }
 
         private void RunIconAction(IconAction action)
