@@ -32,7 +32,8 @@ namespace mfdavies7.TyriaSearch
         // 5: bundled mastery point icons; nearest waypoints for activities on maps that share another map's waypoints.
         // 6: wiki icons for skills the API has none for.
         // 7: areas in landmark contexts, from sector bounds (kept for placing wiki coordinates); wiki icons for traits.
-        private const int MainCacheVersion = 7;
+        // 8: full renown heart icon.
+        private const int MainCacheVersion = 8;
         // NPCs have their own version too. 4: wiki icons.
         private const int NpcCacheVersion = 4;
         private const int WikiAskLimit = 5000; // the ask API stops paging around offset 5,500
@@ -45,11 +46,11 @@ namespace mfdavies7.TyriaSearch
         private const string HeroChallengeName = "Hero Challenge";
         private const string MasteryPointName = "Mastery Point";
 
-        // From /v2/files (map_waypoint, map_poi, map_vista, map_heart_empty, map_heropoint, map_adventure).
+        // From /v2/files (map_waypoint, map_poi, map_vista, map_heart_full, map_heropoint, map_adventure).
         public const string WaypointIcon = "https://render.guildwars2.com/file/32633AF8ADEA696A1EF56D3AE32D617B10D3AC57/157353.png";
         private const string PoiIcon = "https://render.guildwars2.com/file/25B230711176AB5728E86F5FC5F0BFAE48B32F6E/97461.png";
         private const string VistaIcon = "https://render.guildwars2.com/file/A2C16AF497BA3A0903A0499FFBAF531477566F10/358415.png";
-        private const string HeartIcon = "https://render.guildwars2.com/file/09ACBA53B7412CC3C76E7FEF39929843C20CB0E4/102440.png";
+        private const string HeartIcon = "https://render.guildwars2.com/file/B3DEEC72BBEF0C6FC6FEF835A0E275FCB1151BB7/102439.png";
         private const string HeroChallengeIcon = "https://render.guildwars2.com/file/B4EC6BB3FDBC42557C3CAE0CAA9E57EBF9E462E3/156626.png";
         private const string AdventureIcon = "https://render.guildwars2.com/file/94ED0C4A49295657095EF5D09CC8C4E6709E6FCA/961368.png";
         // The wiki's "Event cog (map icon)"; /v2/files has no event icon.

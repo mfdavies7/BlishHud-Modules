@@ -27,6 +27,9 @@ namespace mfdavies7.TyriaSearch
     /// <summary>What clicking a result does. Blish HUD shows the names split into words.</summary>
     public enum ResultAction { CopyChatLink, PasteIntoChat, WhisperToYourself, ShowOnMap, OpenWikiPage, CopyWikiCommand, ToggleFavourite, ShowMenu }
 
+    /// <summary>What clicking the corner icon does. Blish HUD shows the names split into words.</summary>
+    public enum IconAction { OpenSettings, OpenSearch, Nothing }
+
     [Export(typeof(Module))]
     public class TyriaSearchModule : Module
     {
@@ -54,9 +57,9 @@ namespace mfdavies7.TyriaSearch
         private SettingEntry<bool> _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchSkills, _searchTraits;
         private SettingEntry<bool> _searchHearts, _searchHeroChallenges, _searchMasteryPoints, _searchAdventures;
         private SettingEntry<bool> _searchWiki;
-        private SettingEntry<bool> _swapIconClicks;
+        private SettingEntry<IconAction> _iconLeftClick;
+        private SettingEntry<IconAction> _iconRightClick;
         private SettingEntry<bool> _showCornerIcon;
-        private SettingEntry<bool> _restoreClipboard;
         private SettingEntry<bool> _overwriteUnsentText;
         private SettingEntry<bool> _switchBackToSay;
         private SettingEntry<int> _keyDelayMs;
@@ -156,10 +159,12 @@ namespace mfdavies7.TyriaSearch
             _showCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
                 () => "Show Corner Icon",
                 () => "Show the Tyria Search icon at the top left of the screen. Off: open the search with Open Search Hotkey, and the settings with Open Settings Window on the module's page in Blish HUD's settings.");
-            // A new key: "SwapIconClicks" meant the opposite, before left-click opened the settings by default.
-            _swapIconClicks = settings.DefineSetting("SwapIconClicksToSearch", false,
-                () => "Swap Icon Clicks",
-                () => "Left-click the Tyria Search icon at the top left for the search window, and right-click it for the settings. Off: left-click for the settings, right-click for the search window.");
+            _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
+                () => "Left-Click the Icon",
+                () => "What left-clicking the Tyria Search icon at the top left does. Open Settings and Open Search close the window again if it's already open.");
+            _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.OpenSearch,
+                () => "Right-Click the Icon",
+                () => "What right-clicking the Tyria Search icon at the top left does. Open Settings and Open Search close the window again if it's already open.");
             _learnPortals = settings.DefineSetting("LearnPortals", true,
                 () => "Learn New Portals",
                 () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them.");
@@ -198,14 +203,11 @@ namespace mfdavies7.TyriaSearch
                 () => "Include traits in the results. Off: traits aren't downloaded, but those already downloaded are kept for when you turn it back on.");
             _searchWiki = settings.DefineSetting("SearchWiki", true,
                 () => "Search the Wiki",
-                () => "In Everything, also ask the wiki once you pause typing, and list the pages it finds below the results here. In other categories, ask it when nothing here matches. Off: offer to open a wiki search in your browser instead. The Wiki category always asks it.");
-            _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
-                () => "Restore Clipboard",
-                () => "After Paste into Chat or Whisper to Yourself, put back what you had copied before. Those actions type through the clipboard.");
+                () => "In Everything, also ask the wiki once you pause typing, and list the pages it finds below the results here. In other categories, ask it when nothing here matches. Off: offer to open a wiki search in your browser instead, and leave the Wiki category out of the dropdown.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
                 () => "For Whisper to Yourself: if the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
-            _switchBackToSay = settings.DefineSetting("SwitchBackToSay", true,
+            _switchBackToSay = settings.DefineSetting("SwitchBackToSay", false,
                 () => "Switch to /s After Whisper",
                 () => "After Whisper to Yourself, switch chat back to /s, so the next message you type isn't also whispered to yourself. Off: chat stays on the whisper channel.");
             _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
@@ -233,7 +235,7 @@ namespace mfdavies7.TyriaSearch
 
         /// <summary>The settings, in sections, for the settings window.</summary>
         private IView SettingsView() => new SettingsWithValuesView(
-            new SettingsSection("Search Window", new SettingEntry[] { _openKey, _showCornerIcon, _swapIconClicks, _leftClick, _rightClick }),
+            new SettingsSection("Search Window", new SettingEntry[] {_showCornerIcon, _iconLeftClick, _iconRightClick, _leftClick, _rightClick,  _openKey}),
             new SettingsSection("Search Options", new SettingEntry[]
                 {
                     _searchWaypoints, _searchPointsOfInterest, _searchVistas, _searchPortals, _searchHearts, _searchHeroChallenges,
@@ -246,7 +248,7 @@ namespace mfdavies7.TyriaSearch
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
-            new SettingsSection("Chat", new SettingEntry[] { _restoreClipboard, _overwriteUnsentText, _switchBackToSay, _keyDelayMs }))
+            new SettingsSection("Chat", new SettingEntry[] { _overwriteUnsentText, _switchBackToSay, _keyDelayMs }))
         {
             NamedValues = { [_fullDownloadDays] = new Dictionary<int, string> { [EveryUpdate] = "Every Update", [Never] = "Never" } },
         };
@@ -310,6 +312,7 @@ namespace mfdavies7.TyriaSearch
             _searchNpcs.SettingChanged += DataSetting_SettingChanged;
             _searchEvents.SettingChanged += DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged += SearchOption_SettingChanged;
+            _searchWiki.SettingChanged += SearchWiki_SettingChanged;
             _showPortals.SettingChanged += MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
@@ -401,6 +404,7 @@ namespace mfdavies7.TyriaSearch
             _searchNpcs.SettingChanged -= DataSetting_SettingChanged;
             _searchEvents.SettingChanged -= DataSetting_SettingChanged;
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
+            _searchWiki.SettingChanged -= SearchWiki_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
             if (_mapMarker != null) _mapMarker.RemoveRequested -= MapMarker_RemoveRequested;
             _showPortals.SettingChanged -= MapDrawing_SettingChanged;
@@ -426,16 +430,17 @@ namespace mfdavies7.TyriaSearch
 
         private void ShowCornerIcon_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _cornerIcon.Visible = e.NewValue;
 
-        private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e)
-        {
-            if (_swapIconClicks.Value) _window.Toggle();
-            else ToggleSettingsWindow();
-        }
+        private void CornerIcon_Click(object sender, Blish_HUD.Input.MouseEventArgs e) => RunIconAction(_iconLeftClick.Value);
 
-        private void CornerIcon_RightMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e)
+        private void CornerIcon_RightMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e) => RunIconAction(_iconRightClick.Value);
+
+        private void RunIconAction(IconAction action)
         {
-            if (_swapIconClicks.Value) ToggleSettingsWindow();
-            else _window.Toggle();
+            switch (action)
+            {
+                case IconAction.OpenSettings: ToggleSettingsWindow(); break;
+                case IconAction.OpenSearch: _window.Toggle(); break;
+            }
         }
 
         // Search options that filter the downloaded data. Skills and traits are also left out of later downloads, and
@@ -453,6 +458,9 @@ namespace mfdavies7.TyriaSearch
             if (e.NewValue && (sender == _searchSkills || sender == _searchTraits)) RequestRefresh(force: false, restart: true);
             else RebuildIndex();
         }
+
+        // Only the Wiki category comes and goes; the search data doesn't change.
+        private void SearchWiki_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _window.UpdateCategories();
 
         private void PortalLearner_Changed(bool listChanged)
         {
@@ -881,6 +889,7 @@ namespace mfdavies7.TyriaSearch
             EntryKind.Item => _searchItems.Value,
             EntryKind.Skill => _searchSkills.Value,
             EntryKind.Trait => _searchTraits.Value,
+            EntryKind.WikiPage => _searchWiki.Value,
             _ => true,
         };
 
@@ -1029,7 +1038,7 @@ namespace mfdavies7.TyriaSearch
         {
             if (_busy) return;
             _busy = true;
-            bool restoreClipboard = false;
+            // Those actions type through the clipboard, behind the player's back, so it's always put back.
             string previousClipboard = null;
             try
             {
@@ -1038,7 +1047,6 @@ namespace mfdavies7.TyriaSearch
                 await ChatActions.FocusGameAsync();
                 await Task.Delay(delay);
 
-                restoreClipboard = _restoreClipboard.Value;
                 previousClipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync() ?? "";
                 await action(delay);
             }
@@ -1053,7 +1061,7 @@ namespace mfdavies7.TyriaSearch
             }
             finally
             {
-                if (restoreClipboard)
+                if (previousClipboard != null)
                     await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
                 _busy = false;
             }

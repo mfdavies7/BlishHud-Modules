@@ -43,7 +43,7 @@ namespace mfdavies7.TyriaSearch
             ["Tailor"] = "map_crafting_tailor",
             ["Weaponsmith"] = "map_crafting_weaponsmith",
             ["Guild Registrar"] = "map_guild_registrar",
-            ["Renown Heart"] = "map_heart_empty",
+            ["Renown Heart"] = "map_heart_full",
             ["Hero challenge"] = "map_heropoint",
             ["Adventure"] = "map_adventure",
             ["Race Organizer"] = "map_adventure",
@@ -81,7 +81,7 @@ namespace mfdavies7.TyriaSearch
             ["Fractal"] = "map_fractal",
             ["Raid"] = "map_raid_entrance",
             ["Event"] = "map_special_event",
-            ["Renown heart"] = "map_heart_empty",
+            ["Renown heart"] = "map_heart_full",
         };
 
         // The wiki's names for some services aren't what players search for.

@@ -99,7 +99,7 @@ namespace mfdavies7.TyriaSearch
                 ("Skills", i => i.Entry.Kind == EntryKind.Skill, EntryKind.Skill),
                 ("Traits", i => i.Entry.Kind == EntryKind.Trait, EntryKind.Trait),
                 (FavouritesCategory, module.IsFavourite, null),
-                (WikiCategory, _ => false, null), // searched live, see RunSearch
+                (WikiCategory, _ => false, EntryKind.WikiPage), // searched live, see RunSearch; listed while Search the Wiki is on
             };
 
             // The window background and regions from the Blish HUD window guide.
@@ -323,8 +323,7 @@ namespace mfdavies7.TyriaSearch
             }
             else if (_shownResults.Count == 0 && query.Length > 0)
             {
-                // The Wiki category asks even with Search the Wiki off: the player chose it.
-                askingWiki = (results.WikiOnly || _module.SearchWiki) && query.Length >= MinLiveQueryLength && _category.SelectedItem != FavouritesCategory;
+                askingWiki = _module.SearchWiki &&query.Length >= MinLiveQueryLength && _category.SelectedItem != FavouritesCategory;
                 if (askingWiki)
                 {
                     _ = new ResultRow(null)

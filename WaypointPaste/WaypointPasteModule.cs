@@ -1,14 +1,18 @@
 using System;
+using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Blish_HUD;
+using Blish_HUD.Content;
 using Blish_HUD.Controls;
 using Blish_HUD.Graphics.UI;
 using Blish_HUD.Input;
 using Blish_HUD.Modules;
 using Blish_HUD.Settings;
 using Gw2Sharp.ChatLinks;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using mfdavies7.ModuleShared;
 using static mfdavies7.ModuleShared.ChatInput;
 using Mouse = Blish_HUD.Controls.Intern.Mouse;
@@ -16,12 +20,25 @@ using MouseButton = Blish_HUD.Controls.Intern.MouseButton;
 
 namespace mfdavies7.WaypointPaste
 {
+    /// <summary>What clicking the corner icon does.</summary>
+    public enum IconAction
+    {
+        [Description("Open Settings")] OpenSettings,
+        [Description("Paste Waypoint")] PasteWaypoint,
+        [Description("Paste and Click Waypoint")] PasteAndClickWaypoint,
+        [Description("Nothing")] Nothing,
+    }
+
     [Export(typeof(Module))]
     public class WaypointPasteModule : Module
     {
         private static readonly Logger Logger = Logger.GetLogger<WaypointPasteModule>();
 
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+        [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr window, ref NativePoint point);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint { public int X, Y; }
 
         // The desktop across all monitors; a monitor left of or above the main one has negative coordinates.
         private const int SmXVirtualScreen = 76, SmYVirtualScreen = 77, SmCxVirtualScreen = 78, SmCyVirtualScreen = 79;
@@ -29,7 +46,6 @@ namespace mfdavies7.WaypointPaste
         private SettingEntry<KeyBinding> _pasteKey;
         private SettingEntry<string> _waypoint;
         private SettingEntry<bool> _useClipboardFirst;
-        private SettingEntry<bool> _restoreClipboard;
         private SettingEntry<bool> _overwriteUnsentText;
         private SettingEntry<bool> _switchBackToSay;
         private SettingEntry<bool> _autoClickLink;
@@ -37,30 +53,49 @@ namespace mfdavies7.WaypointPaste
         private SettingEntry<int> _clickWaitMs;
         private SettingEntry<int> _clickX;
         private SettingEntry<int> _clickY;
+        private SettingEntry<bool> _showClickPosition;
         private SettingEntry<int> _keyDelayMs;
+        private SettingEntry<bool> _showCornerIcon;
+        private SettingEntry<IconAction> _iconLeftClick;
+        private SettingEntry<IconAction> _iconRightClick;
 
         private bool _busy;
+
+        private Texture2D _icon;
+        private CornerIcon _cornerIcon;
+        private StandardWindow _settingsWindow;
+
+        private ClickMarker _clickMarker;
+        // The marker is also shown until then, after the position is set or changed.
+        private DateTime _showMarkerUntilUtc;
+        private static readonly TimeSpan MarkerShowTime = TimeSpan.FromSeconds(3);
 
         [ImportingConstructor]
         public WaypointPasteModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters) { }
 
         protected override void DefineSettings(SettingCollection settings)
         {
+            _showCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
+                () => "Show Corner Icon",
+                () => "Show the Waypoint Paste icon at the top left of the screen. Off: paste with Paste Waypoint Hotkey, and change settings on the module's page in Blish HUD's settings.");
+            _iconLeftClick = settings.DefineSetting("IconLeftClick", IconAction.OpenSettings,
+                () => "Left-Click the Icon",
+                () => "What left-clicking the Waypoint Paste icon at the top left does. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
+            _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.PasteAndClickWaypoint,
+                () => "Right-Click the Icon",
+                () => "What right-clicking the Waypoint Paste icon at the top left does. Paste and Click Waypoint clicks the link only when Auto-Click Chat Link is on; otherwise it's the same as Paste Waypoint.");
             _pasteKey = settings.DefineSetting("PasteKey", new KeyBinding(),
                 () => "Paste Waypoint Hotkey",
                 () => "Whispers the waypoint to your own character, so its link shows up in chat, ready to click or share.");
             _waypoint = settings.DefineSetting("Waypoint", "[&BCAJAAA=]",
                 () => "Waypoint Chat Code",
                 () => "The waypoint to paste, for example [&BCAJAAA=]. Shift-click a waypoint on the map to get its code.");
-            _useClipboardFirst = settings.DefineSetting("UseClipboardFirst", false,
+            _useClipboardFirst = settings.DefineSetting("UseClipboardFirst", true,
                 () => "Use Copied Waypoint First",
                 () => "If your clipboard holds a waypoint, point of interest or vista chat code, paste that instead of the saved one.");
-            _restoreClipboard = settings.DefineSetting("RestoreClipboard", true,
-                () => "Restore Clipboard",
-                () => "Put back what you had copied before. The module uses the clipboard to type in chat.");
             _overwriteUnsentText = settings.DefineSetting("OverwriteUnsentText", false,
                 () => "Overwrite Unsent Chat Text",
-                () => "If the chat box still holds text you typed but didn't send, delete it and paste the waypoint. The deleted text can't be recovered. Off: stop and leave your text in chat.");
+                () => "If the chat box still holds text you typed but didn't send, delete it and send the whisper. The deleted text can't be recovered. Off: stop and leave your text in chat.");
             _switchBackToSay = settings.DefineSetting("SwitchBackToSay", false,
                 () => "Switch to /s After Whisper",
                 () => "After the whisper is sent, switch chat back to /s, so the next message you type isn't also whispered to yourself. With Auto-Click Chat Link, this happens before the link is clicked. Off: chat stays on the whisper channel.");
@@ -80,6 +115,9 @@ namespace mfdavies7.WaypointPaste
                 () => "Click Position Y",
                 () => "Screen Y position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.");
             _clickY.SetRange(top, top + GetSystemMetrics(SmCyVirtualScreen) - 1);
+            _showClickPosition = settings.DefineSetting("ShowClickPosition", false,
+                () => "Show Click Position",
+                () => "Mark the saved click position on screen, to check it's over the chat link. Off: it's still shown for a few seconds after Set Click Position Hotkey is pressed or the position is changed.");
             _clickWaitMs = settings.DefineSetting("ClickWaitMs", 500,
                 () => "Wait Before Clicking Link (ms)",
                 () => "Time for the whisper to show up in chat before the link is clicked. Raise it if the click sometimes misses the link.");
@@ -90,7 +128,54 @@ namespace mfdavies7.WaypointPaste
             _keyDelayMs.SetRange(20, 250);
         }
 
-        public override IView GetSettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
+        public override IView GetSettingsView() => SettingsView();
+
+        private IView SettingsView() => new SettingsWithValuesView(ModuleParameters.SettingsManager.ModuleSettings);
+
+        // Textures are loaded here rather than in Initialize, as Blish HUD's module guide asks.
+        protected override Task LoadAsync()
+        {
+            _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste.png");
+            _cornerIcon = new CornerIcon { Icon = _icon, Visible = _showCornerIcon.Value }; // no name, so no tooltip
+            _cornerIcon.Click += CornerIcon_Click;
+            // On release, not press: the button mustn't still be held while keys are typed and the link is clicked.
+            _cornerIcon.RightMouseButtonReleased += CornerIcon_RightMouseButtonReleased;
+            // The same window as Tyria Search's settings, so the two look alike.
+            _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
+            {
+                Parent = GameService.Graphics.SpriteScreen,
+                Title = "Waypoint Paste",
+                Subtitle = "Settings",
+                Emblem = _icon,
+                Id = "mfdavies7.waypointpaste.settings",
+                SavesPosition = true,
+            };
+            _showCornerIcon.SettingChanged += ShowCornerIcon_SettingChanged;
+            return Task.CompletedTask;
+        }
+
+        private void ShowCornerIcon_SettingChanged(object sender, ValueChangedEventArgs<bool> e) => _cornerIcon.Visible = e.NewValue;
+
+        private void CornerIcon_Click(object sender, MouseEventArgs e) => RunIconAction(_iconLeftClick.Value);
+
+        private void CornerIcon_RightMouseButtonReleased(object sender, MouseEventArgs e) => RunIconAction(_iconRightClick.Value);
+
+        private void RunIconAction(IconAction action)
+        {
+            switch (action)
+            {
+                case IconAction.OpenSettings:
+                    if (_settingsWindow.Visible) _settingsWindow.Hide();
+                    else _settingsWindow.Show(SettingsView());
+                    break;
+                case IconAction.PasteWaypoint:
+                    StartPaste(click: false, fromIcon: true);
+                    break;
+                case IconAction.PasteAndClickWaypoint:
+                    StartPaste(click: _autoClickLink.Value, fromIcon: true);
+                    break;
+            }
+        }
 
         protected override void Initialize()
         {
@@ -98,7 +183,37 @@ namespace mfdavies7.WaypointPaste
             _pasteKey.Value.Activated += PasteKey_Activated;
             _setClickPositionKey.Value.Enabled = true;
             _setClickPositionKey.Value.Activated += SetClickPositionKey_Activated;
+            _clickX.SettingChanged += ClickPosition_SettingChanged;
+            _clickY.SettingChanged += ClickPosition_SettingChanged;
+
+            _clickMarker = new ClickMarker { Parent = GameService.Graphics.SpriteScreen, Visible = false };
         }
+
+        protected override void Update(GameTime gameTime)
+        {
+            Point position = default;
+            bool show = (_showClickPosition.Value || DateTime.UtcNow < _showMarkerUntilUtc)
+                && !(_clickX.Value == 0 && _clickY.Value == 0)
+                && GameService.GameIntegration.Gw2Instance.IsInGame
+                && TryScreenToUi(_clickX.Value, _clickY.Value, out position);
+            if (show) _clickMarker.CenterAt(position);
+            _clickMarker.Visible = show;
+        }
+
+        /// <summary>A screen position in Blish HUD's UI units, which start at GW2's client area and scale with UI Size.</summary>
+        private static bool TryScreenToUi(int x, int y, out Point position)
+        {
+            position = default;
+            var window = GameService.GameIntegration.Gw2Instance.Gw2WindowHandle;
+            var origin = new NativePoint();
+            if (window == IntPtr.Zero || !ClientToScreen(window, ref origin)) return false;
+            float scale = GameService.Graphics.UIScaleMultiplier;
+            position = new Point((int)Math.Round((x - origin.X) / scale), (int)Math.Round((y - origin.Y) / scale));
+            return true;
+        }
+
+        private void ClickPosition_SettingChanged(object sender, ValueChangedEventArgs<int> e) =>
+            _showMarkerUntilUtc = DateTime.UtcNow + MarkerShowTime;
 
         protected override void Unload()
         {
@@ -106,6 +221,22 @@ namespace mfdavies7.WaypointPaste
             _pasteKey.Value.Activated -= PasteKey_Activated;
             _setClickPositionKey.Value.Enabled = false;
             _setClickPositionKey.Value.Activated -= SetClickPositionKey_Activated;
+            _clickX.SettingChanged -= ClickPosition_SettingChanged;
+            _clickY.SettingChanged -= ClickPosition_SettingChanged;
+            _clickMarker?.Dispose();
+            _clickMarker = null;
+            _showCornerIcon.SettingChanged -= ShowCornerIcon_SettingChanged;
+            if (_cornerIcon != null)
+            {
+                _cornerIcon.Click -= CornerIcon_Click;
+                _cornerIcon.RightMouseButtonReleased -= CornerIcon_RightMouseButtonReleased;
+                _cornerIcon.Dispose();
+                _cornerIcon = null;
+            }
+            _settingsWindow?.Dispose();
+            _settingsWindow = null;
+            _icon?.Dispose();
+            _icon = null;
         }
 
         private void SetClickPositionKey_Activated(object sender, EventArgs e)
@@ -113,13 +244,26 @@ namespace mfdavies7.WaypointPaste
             var cursor = Mouse.GetPosition();
             _clickX.Value = cursor.X;
             _clickY.Value = cursor.Y;
+            _showMarkerUntilUtc = DateTime.UtcNow + MarkerShowTime; // even if the position didn't change
             ScreenNotification.ShowNotification("Waypoint Paste: Chat link click position saved.");
         }
 
-        private void PasteKey_Activated(object sender, EventArgs e)
+        private void PasteKey_Activated(object sender, EventArgs e) => StartPaste(_autoClickLink.Value, fromIcon: false);
+
+        /// <summary>
+        /// Whispers the waypoint, then clicks its link if <paramref name="click"/>. A hotkey only works while the game
+        /// has focus; after clicking the icon Blish HUD may have it, so the game is focused first.
+        /// </summary>
+        private void StartPaste(bool click, bool fromIcon)
         {
             var gw2 = GameService.GameIntegration.Gw2Instance;
-            if (_busy || !gw2.IsInGame || !gw2.Gw2HasFocus) return;
+            if (_busy) return;
+            if (!fromIcon && (!gw2.IsInGame || !gw2.Gw2HasFocus)) return;
+            if (fromIcon && !gw2.IsInGame)
+            {
+                ScreenNotification.ShowNotification("Waypoint Paste: You need to be in game first.", ScreenNotification.NotificationType.Warning);
+                return;
+            }
 
             // Chat must start closed: typing into an open message would mix with the whisper.
             if (GameService.Gw2Mumble.UI.IsTextInputFocused)
@@ -132,28 +276,29 @@ namespace mfdavies7.WaypointPaste
             _busy = true;
             // Off Blish HUD's input thread: awaits would resume there, and if Blish HUD restarts that thread
             // the paste never finishes and _busy stays set until reload.
-            _ = Task.Run(PasteWaypointAsync);
+            _ = Task.Run(() => PasteWaypointAsync(click, focusGame: fromIcon));
         }
 
-        private async Task PasteWaypointAsync()
+        private async Task PasteWaypointAsync(bool click, bool focusGame)
         {
-            // Restore even an empty clipboard, so the message typed last isn't left behind.
-            bool restoreClipboard = false;
+            // The whisper is typed through the clipboard, so it's always put back afterwards. Even an empty
+            // clipboard is restored, so the message typed last isn't left behind.
             string previousClipboard = null;
             try
             {
                 int delay = _keyDelayMs.Value;
                 string clipboard = await ClipboardUtil.WindowsClipboardService.GetTextAsync();
-                restoreClipboard = _restoreClipboard.Value;
                 previousClipboard = clipboard ?? "";
 
                 string waypoint = _useClipboardFirst.Value && IsPointOfInterest(clipboard) ? clipboard.Trim() : _waypoint.Value.Trim();
                 if (!IsPointOfInterest(waypoint)) throw new AbortException("The saved waypoint isn't a valid chat code. Check Waypoint Chat Code in the settings.");
 
+                if (focusGame) await ChatActions.FocusGameAsync();
+
                 // Switching back to /s is part of the whisper, so it always happens before the link is clicked.
                 await ChatActions.WhisperToSelfAsync(waypoint, delay, _overwriteUnsentText.Value, _switchBackToSay.Value);
 
-                if (_autoClickLink.Value) await ClickChatLinkAsync(delay);
+                if (click) await ClickChatLinkAsync(delay);
             }
             catch (AbortException ex)
             {
@@ -168,7 +313,7 @@ namespace mfdavies7.WaypointPaste
             {
                 try
                 {
-                    if (restoreClipboard)
+                    if (previousClipboard != null)
                         await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
                 }
                 catch (Exception ex)
