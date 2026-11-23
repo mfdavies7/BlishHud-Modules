@@ -8,7 +8,7 @@ Guild Wars 2 quality-of-life modules for [Blish HUD](https://blishhud.com). Each
 | [Waypoint Paste](WaypointPaste/README.md) | Press a hotkey to whisper a waypoint chat link to yourself, ready to click or share. |
 | [Tyria Search](TyriaSearch/README.md) | Search waypoints, points of interest, vistas, hearts, NPCs, events, portals, items, skills and traits, then copy, paste or whisper their chat links, or mark them on the map. |
 
-Every module keeps its settings in its own window, opened from its icon at the top left or from the **Settings** button on the module's page in Blish HUD's settings. When a module types into chat through the clipboard, it puts back whatever you had copied.
+Every module keeps its settings in its own window, opened from its icon at the top left or from the **Settings** button on the module's page in Blish HUD's settings.
 
 ## Build
 

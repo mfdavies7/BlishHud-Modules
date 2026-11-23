@@ -1,27 +1,36 @@
 # Wiki Search
 
-Shift + left-click an item in Guild Wars 2 to open its wiki page.
+Shift + left-click an item in Guild Wars 2 to open its wiki page in your browser. It works on anything you can shift-click into chat: items in your inventory, bank and the Trading Post, rewards, skills, and points on the world map.
 
-GW2 puts the item's chat link in the chat box; the module adds `/wiki ` in front of it and presses Enter, so the game opens the wiki in your browser.
 Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scratch.
+
+## How to Use
+
+1. Hold Shift. A hint next to the cursor shows that a click will search.
+2. Left-click an item. Its wiki page opens in your browser.
+
+To shift-click items into chat as usual, turn Wiki Search off with the Toggle Hotkey or by right-clicking its icon at the top left. The icon is greyed out while Wiki Search is off.
 
 ## Settings
 
-The settings are in their own window. Click the Wiki Search icon at the top left to open or close it (by default; see Corner Icon Left Click Action), or press **Settings** on the module's page in Blish HUD's settings.
+Left-click the Wiki Search icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings.
 
-- **Register Corner Icon** (on) – register the Wiki Search icon at the top left. The icon is greyed out while Enabled is off, so it shows whether Wiki Search is on. Off: the icon is removed and the two click action settings are disabled.
-- **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Toggle Wiki Search) – Open Settings opens or closes the settings window; Toggle Wiki Search switches Enabled like the hotkey; Open Wiki opens the wiki's main page in Wiki Language; Nothing ignores the click.
-- **Toggle Hotkey** (unset) – switches the Enabled setting on or off.
+- **Register Corner Icon** (on) – show the Wiki Search icon at the top left.
+- **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Toggle Wiki Search) – Open Settings, Toggle Wiki Search, Open Wiki (the wiki's main page) or Nothing.
+- **Toggle Hotkey** (unset) – turns Wiki Search on or off.
 - **Enabled** (on) – turn it off to shift-click items into chat normally.
-- **Wiki Language** (Game Language) – Game Language, English, German, French or Spanish. Game Language searches the wiki for your game client's language; Open Wiki, which can't ask the game, uses Blish HUD's language instead.
-- **Overwrite Unsent Chat Text** (off) – also search when chat was already open before the click: if chat still holds text you typed but didn't send, delete it and search the item. The deleted text can't be recovered. Off: with chat already open, shift-click links items into your message as usual.
-- **Work When the Map Is Open** (on) – when off, shift-clicking map points links them as usual.
-- **Return to the Game After Searching** (off) – switch back to GW2 once the browser opens.
+- **Wiki Language** (Game Language) – Game Language, English, German, French or Spanish.
+- **Overwrite Unsent Chat Text** (off) – also search when chat is already open, deleting any text you typed but didn't send. That text can't be recovered. Off: with chat open, shift-click links items into your message as usual.
+- **Work When the Map Is Open** (on) – off: shift-clicking map points links them as usual.
+- **Return to the Game After Searching** (off) – switch back to Guild Wars 2 once the browser opens.
 - **Key Press Delay (ms)** (60, 20–250) – raise it if the command is sometimes typed wrong.
-- **Wait for Shift Release Before Sending** (off) – only type `/wiki` after you let go of Shift. Turn on if the command goes missing or the link gets replaced.
-- **Show Hint While Holding Shift** (on) – shown only when a click would search: enabled, in game, game focused, and chat or map closed unless the settings above allow them.
+- **Wait for Shift Release Before Sending** (off) – turn it on if the command goes missing or the link gets replaced.
+- **Show Hint While Holding Shift** (on) – show the hint next to the cursor.
 
-The hint can't tell whether the cursor is over an item; Blish HUD and GW2 don't expose that.
+## Troubleshooting
+
+- **The command is typed wrong or not sent:** raise Key Press Delay, or turn on Wait for Shift Release Before Sending.
+- **Nothing happens:** check that Wiki Search is on (the icon isn't greyed out), and that chat was closed when you clicked, unless Overwrite Unsent Chat Text is on.
 
 ## Install
 

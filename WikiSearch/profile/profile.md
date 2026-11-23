@@ -1,17 +1,19 @@
 # Wiki Search
 
-Shift + left-click an item in Guild Wars 2 to open its wiki page.
+Shift + left-click an item in Guild Wars 2 to open its wiki page in your browser. It works on anything you can shift-click into chat: items in your inventory, bank and the Trading Post, rewards, skills, and points on the world map.
 
-When you shift-click an item, the game puts its chat link in the chat box. Wiki Search adds `/wiki ` in front of it and sends it, so the game opens the item's wiki page in your browser. It works on anything you can shift-click into chat: items in your inventory, bank and the Trading Post, rewards, skills, and points on the world map.
+## How to Use
+
+1. Hold Shift. A hint next to the cursor shows that a click will search.
+2. Left-click an item. Its wiki page opens in your browser.
+
+To shift-click items into chat as usual, turn Wiki Search off with a hotkey or by right-clicking its icon at the top left. The icon is greyed out while Wiki Search is off.
 
 ## Features
 
-- **One click:** no typing, no copying names. Hold Shift, click, read.
+- **One click:** no typing, no copying names.
 - **Your language:** search the English, German, French or Spanish wiki, or follow your game client's language.
-- **A hint while you hold Shift**, so you know a click will search. It only shows when a click would actually search.
-- **Toggle it any time:** with a hotkey, or by right-clicking its icon at the top left. The icon greys out while Wiki Search is off, so you can tell at a glance.
-- **Safe with chat:** if chat is already open with a message you're typing, shift-click links the item into your message as usual (unless you choose otherwise).
-- **Your clipboard is left alone:** the command is typed through the clipboard, and whatever you had copied is put back afterwards.
+- **Safe with chat:** if you're typing a message, shift-click links the item into it as usual (unless you choose otherwise).
 
 ## Settings
 
@@ -30,8 +32,6 @@ Left-click the Wiki Search icon at the top left to open its settings, or press *
 | Key Press Delay (ms) | 60 | Raise it if the command is sometimes typed wrong. |
 | Wait for Shift Release Before Sending | Off | Turn on if the command goes missing or the link gets replaced. |
 | Show Hint While Holding Shift | On | Shows the hint next to the cursor. |
-
-The hint can't tell whether the cursor is over an item; Blish HUD and the game don't expose that.
 
 ## Troubleshooting
 
