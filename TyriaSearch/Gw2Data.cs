@@ -120,8 +120,14 @@ namespace Bytex.TyriaSearch
 
         private readonly string _cacheDirectory;
         private readonly HttpClient _http;
-        // The API allows short bursts of about 300 requests and 5 per second after that.
         private readonly SemaphoreSlim _apiSlots = new SemaphoreSlim(4);
+        // The API's limit is a token bucket per IP: bursts of 300, refilled at 5 per second. Blish HUD and other
+        // modules share it, so stay well inside it instead of relying on 429 retries.
+        private const double ApiBurst = 100;
+        private const double ApiRequestsPerSecond = 4;
+        private readonly object _apiBucketLock = new object();
+        private double _apiTokens = ApiBurst;
+        private DateTime _apiRefilled = DateTime.UtcNow;
         // Fewer at once for the wiki, which is run by volunteers.
         private readonly SemaphoreSlim _wikiSlots = new SemaphoreSlim(2);
 
@@ -1315,6 +1321,7 @@ namespace Bytex.TyriaSearch
                 await slots.WaitAsync(ct);
                 try
                 {
+                    if (slots == _apiSlots) await TakeApiTokenAsync(ct);
                     using (var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
                     {
                         int status = (int)response.StatusCode;
@@ -1340,6 +1347,28 @@ namespace Bytex.TyriaSearch
 
                 if (attempt >= MaxAttempts) throw new HttpRequestException($"Request {url} failed: {failure}");
                 await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+            }
+        }
+
+        /// <summary>Waits until the API rate limit allows another request.</summary>
+        private async Task TakeApiTokenAsync(CancellationToken ct)
+        {
+            while (true)
+            {
+                TimeSpan wait;
+                lock (_apiBucketLock)
+                {
+                    var now = DateTime.UtcNow;
+                    _apiTokens = Math.Min(ApiBurst, _apiTokens + (now - _apiRefilled).TotalSeconds * ApiRequestsPerSecond);
+                    _apiRefilled = now;
+                    if (_apiTokens >= 1)
+                    {
+                        _apiTokens--;
+                        return;
+                    }
+                    wait = TimeSpan.FromSeconds((1 - _apiTokens) / ApiRequestsPerSecond);
+                }
+                await Task.Delay(wait, ct);
             }
         }
 

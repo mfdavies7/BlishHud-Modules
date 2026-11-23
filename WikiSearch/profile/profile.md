@@ -42,4 +42,6 @@ The hint can't tell whether the cursor is over an item; Blish HUD and the game d
 
 Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scratch.
 
+Wiki Search is an unofficial fan project, not affiliated with, endorsed by or sponsored by ArenaNet or NCSOFT. © ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, Guild Wars 2, GW2, Heart of Thorns, Path of Fire, End of Dragons, Secrets of the Obscure, Janthir Wilds, Visions of Eternity, and all associated logos, designs, and composite marks are trademarks or registered trademarks of NCSOFT Corporation. All other trademarks are the property of their respective owners.
+
 Found a bug or have an idea? [Open an issue on GitHub](https://github.com/mfdavies7/BlishHud-Modules/issues).
