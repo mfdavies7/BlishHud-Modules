@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+<defs><clipPath id="c1"><rect x="12.76" y="11.76" width="37.98" height="37.98" rx="0.76" transform="rotate(45 31.75 30.75)" fill="#000000"/></clipPath><clipPath id="c2"><rect x="12.76" y="11.76" width="37.98" height="37.98" rx="0.76" transform="rotate(45 31.75 30.75)" fill="#000000"/></clipPath></defs>
+<rect x="10.36" y="9.36" width="42.78" height="42.78" rx="2.2" transform="rotate(45 31.75 30.75)" fill="#303018"/>
+<rect x="12.76" y="11.76" width="37.98" height="37.98" rx="0.76" transform="rotate(45 31.75 30.75)" fill="#e6d49c"/>
+<g clip-path="url(#c1)"><polygon points="-48.25,96.391 31.75,16.391 111.75,96.391 31.75,216.391" fill="#303018"/></g>
+<g clip-path="url(#c2)"><polygon points="-48.25,100.209 31.75,20.209 111.75,100.209 31.75,220.209" fill="#d8c692"/></g>
+<rect x="20.295" y="23.045" width="22.91" height="22.91" rx="1.4" transform="rotate(45 31.75 34.5)" fill="#303018"/>
+<rect x="23.395" y="26.145" width="16.71" height="16.71" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#d2cec1"/>
+<rect x="23.572" y="26.322" width="16.357" height="16.357" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#d6d2c5"/>
+<rect x="23.748" y="26.498" width="16.003" height="16.003" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#dbd7ca"/>
+<rect x="23.925" y="26.675" width="15.65" height="15.65" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#dfdbce"/>
+<rect x="24.102" y="26.852" width="15.296" height="15.296" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#e3dfd2"/>
+<rect x="24.279" y="27.029" width="14.942" height="14.942" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#e7e3d6"/>
+<rect x="24.456" y="27.206" width="14.589" height="14.589" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#ece8db"/>
+<rect x="24.632" y="27.382" width="14.235" height="14.235" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f0ecdf"/>
+<rect x="24.809" y="27.559" width="13.882" height="13.882" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f2eee1"/>
+<rect x="24.986" y="27.736" width="13.528" height="13.528" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f2eee1"/>
+<rect x="25.163" y="27.913" width="13.175" height="13.175" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f2eee1"/>
+<rect x="25.339" y="28.089" width="12.821" height="12.821" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f2eee1"/>
+<rect x="25.516" y="28.266" width="12.468" height="12.468" rx="0.8" transform="rotate(45 31.75 34.5)" fill="#f2eee1"/>
+</svg>

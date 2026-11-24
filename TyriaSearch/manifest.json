@@ -3,7 +3,7 @@
   "name": "Tyria Search",
   "namespace": "bytex.tyriasearch",
   "package": "bytex.bh.TyriaSearch.dll",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "url": "https://github.com/mfdavies7/BlishHud-Modules",
   "description": "Search waypoints, points of interest, hearts, NPCs, events, items, skills and traits, then copy, paste or whisper their chat links or mark them on the map.",
   "contributors": [

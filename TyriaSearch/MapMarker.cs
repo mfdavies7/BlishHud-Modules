@@ -25,6 +25,9 @@ namespace Bytex.TyriaSearch
         private readonly Func<int, int> _continentOf;
         private readonly Func<SearchEntry, AsyncTexture2D> _iconFor;
         private readonly Func<SearchEntry, Texture2D> _placeholderFor;
+        // Each target's icon, kept while it's marked (see where it's drawn).
+        private readonly Dictionary<SearchEntry, AsyncTexture2D> _icons = new Dictionary<SearchEntry, AsyncTexture2D>();
+        private readonly AsyncTexture2D _waypointIcon = GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
 
         public List<SearchItem> Targets { get; } = new List<SearchItem>();
 
@@ -180,13 +183,17 @@ namespace Bytex.TyriaSearch
         {
             _drawn.Clear();
             _paintedUtc = DateTime.UtcNow;
+            // Let go of icons for targets that were removed.
+            if (_icons.Count > Targets.Count)
+                foreach (var gone in _icons.Keys.Where(e => !Targets.Any(t => t.Entry == e)).ToList()) _icons.Remove(gone);
             var ui = GameService.Gw2Mumble.UI;
-            if (ui.MapScale <= 0) return;
+            // On a loading screen Mumble stops updating, so IsMapOpen stays true from before it.
+            if (ui.MapScale <= 0 || !GameService.GameIntegration.Gw2Instance.IsInGame) return;
             double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier / GameDpiScale();
             View view;
             if (ui.IsMapOpen)
                 view = new View { Bounds = new Rectangle(0, 0, Width, Height), UnitsPerUiPixel = unitsPerUiPixel, EdgeMargin = EdgeMargin, IconScale = CloseZoomScale(ui.MapScale) };
-            else if (ShowOnMinimap && GameService.GameIntegration.Gw2Instance.IsInGame && (Targets.Count > 0 || ShowPortals))
+            else if (ShowOnMinimap && (Targets.Count > 0 || ShowPortals))
                 view = new View
                 {
                     Bounds = MinimapBounds(),
@@ -319,9 +326,11 @@ namespace Bytex.TyriaSearch
             float pulse = 0.65f + 0.35f * (float)Math.Sin(seconds * 4);
             int size = (int)(IconSize * view.IconScale * (offScreen ? 0.8f : 1f + 0.15f * pulse));
 
-            var icon = _iconFor(entry);
-            // HasSwapped, not HasTexture: a downloading texture is a transparent pixel until it arrives.
-            if (icon == null || !icon.HasSwapped) icon = _placeholderFor(entry) ?? GameService.Content.GetRenderServiceTexture(Gw2Data.WaypointIcon);
+            // Kept, not asked for each frame: Blish HUD holds render service icons weakly, so a collected one comes back as a
+            // fresh transparent texture until it reloads, and the marker would flash. Asked again if its download failed.
+            if (!_icons.TryGetValue(entry, out var icon) || TyriaSearchModule.IsErrorTexture(icon)) _icons[entry] = icon = _iconFor(entry);
+            // Not HasTexture: a downloading texture is a transparent pixel until it arrives, and Blish HUD's error texture if it fails.
+            if (!TyriaSearchModule.IsLoaded(icon)) icon = _placeholderFor(entry) ?? _waypointIcon;
 
             var iconRect = new Rectangle((int)pinned.X - size / 2, (int)pinned.Y - size / 2, size, size);
             var backing = Inflate(iconRect, view.Minimap ? 2 : 4);

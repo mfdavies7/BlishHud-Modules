@@ -10,7 +10,7 @@ The first time, the search data is downloaded, which takes a few minutes. You ca
 
 - **Search by map or area:** "Queensdale" lists its landmarks; "Queensdale hero challenge" finds that map's hero challenges.
 - **Search by chat code:** paste a code to see what it is.
-- **Find NPCs by service:** "bank" lists every banker, each with the waypoint nearest to them.
+- **Find NPCs by service:** "bank" lists every banker, each with the waypoint nearest to them. "Cooking station" or "crafting station" finds the master craftsmen who stand at them.
 - **Find portals between maps:** "Black Citadel to Lion's Arch", "gate from Hoelbrak".
 - **A second language:** names show in Blish HUD's language, and you can also match names in a second one.
 - **The wiki:** pages from the wiki are listed below the results as you type.
@@ -29,7 +29,7 @@ What clicking and right-clicking do can be changed in the settings.
 
 - **Show on Map** marks results on the world map and minimap, as many as you like. A marker that's off screen sits at the edge, pointing the way. Right-click a marker to remove it.
 - **Portals on the map:** optionally mark every zone portal, asura gate, and dungeon, raid and fractal entrance, labelled with where they lead.
-- **Learns new portals:** take a portal it doesn't know, and it offers to add it, then asks you to go back through for the return portal.
+- **Learns new portals:** turn on Learn New Portals, take a portal it doesn't know, and it offers to add it, then asks you to go back through for the return portal.
 
 ## Settings
 

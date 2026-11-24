@@ -820,7 +820,7 @@ namespace Bytex.TyriaSearch
         }
 
         /// <summary>The image URL of a wiki file page ("File:Quicksand.png"), from MediaWiki's MD5-based upload layout.</summary>
-        private static string WikiFileUrl(string filePage)
+        internal static string WikiFileUrl(string filePage)
         {
             string name = filePage.Substring(filePage.IndexOf(':') + 1).Replace(' ', '_');
             string hash;
@@ -1308,6 +1308,30 @@ namespace Bytex.TyriaSearch
                 if (value?.Type == JTokenType.Integer || value?.Type == JTokenType.Float) return value.Value<double>();
             }
             return null;
+        }
+
+        /// <summary>
+        /// Healing Power coefficients of a skill's or trait's healing and barrier facts, from the wiki: the API gives only
+        /// the amount at 0 Healing Power. Keyed by that amount, which is how the API's facts are matched to the wiki's
+        /// (game mode splits are separate facts with their own amounts). Empty if the wiki has none.
+        /// </summary>
+        public async Task<Dictionary<double, double>> HealingCoefficientsAsync(int id, bool trait, CancellationToken ct)
+        {
+            string context = trait ? "Trait fact" : "Skill fact";
+            var response = await AskAsync($"[[Has context::{context}]][[Is for skill.Has game id::{id}]][[Has fact type::Healing||Barrier]]" +
+                                          "[[Has fact coefficient::+]]|?Has fact number|?Has fact coefficient|limit=100", ct);
+            var coefficients = new Dictionary<double, double>();
+            foreach (var result in AskResults(response))
+            {
+                var printouts = result.Value["printouts"];
+                var number = (printouts?["Has fact number"] as JArray)?.FirstOrDefault();
+                var coefficient = (printouts?["Has fact coefficient"] as JArray)?.FirstOrDefault();
+                if (IsNumber(number) && IsNumber(coefficient) && !coefficients.ContainsKey(number.Value<double>()))
+                    coefficients[number.Value<double>()] = coefficient.Value<double>();
+            }
+            return coefficients;
+
+            bool IsNumber(JToken value) => value?.Type == JTokenType.Integer || value?.Type == JTokenType.Float;
         }
 
         // ---- HTTP ----

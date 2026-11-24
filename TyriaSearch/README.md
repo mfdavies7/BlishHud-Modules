@@ -15,12 +15,14 @@ The first time, the search data is downloaded, which takes a few minutes. You ca
 - **By name:** "Shaemoor Waypoint", "Omnomberry Bar", "Signet of Rage".
 - **By map or area:** "Queensdale" lists its landmarks. Hero challenges and mastery points have no names, so search "Queensdale hero challenge" or "mastery point".
 - **By chat code:** paste a code to see what it is.
-- **NPCs by service:** "bank" lists every banker.
+- **NPCs by service:** "bank" lists every banker. NPCs are also found by what they stand beside or what players call it: "cooking station" lists every master chef, "crafting station" every master craftsman ("Hoelbrak crafting station" just that city's), and "vault", "TP", "repair anvil" and "forge" work too.
 - **Portals:** "Portal to Kessex Hills", "Asura Gate to Hoelbrak", "Dungeon Entrance to Ascalonian Catacombs". Two map names find the portals between them ("Black Citadel to Lion's Arch"), and "portal" or "gate" lists them all.
 - **Effects:** boons, conditions and other effects, plus food and utility effects, listed under the consumable's name.
 - **The wiki:** in Everything, pages from the wiki are listed below the results once you pause typing. The Wiki category searches only the wiki. When nothing matches, a result offers to search the wiki in your browser.
 
-Each result shows what it is and where: "Waypoint · Shaemoor Fields · Queensdale". Hover over a skill, trait or item to see its game tooltip, or over anything else to see its chat link. NPC, event, effect and portal names are in English. NPCs and events whose exact spot isn't known are placed at the centre of their area, marked *approximate*.
+The best matches come first: exact names, then names starting with what you typed, then the rest. Within each of those, results on the map you're on come first. Among equal matches, the nearest to you comes first, on other maps too. Results that differ only in their chat code, like the game's identical copies of some items, are listed once, showing your favourite if one of them is. Skills and traits are always listed separately, since their tooltips can still differ.
+
+Each result shows what it is and where: "Waypoint · Shaemoor Fields · Queensdale". Hover over a skill, trait or item to see its game tooltip, or over anything else to see its chat link. Skill and trait tooltips show PvE values; some differ in PvP and WvW. NPC, event, effect and portal names are in English. NPCs and events whose exact spot isn't known are placed at the centre of their area, marked *approximate*.
 
 ### Actions
 
@@ -35,7 +37,7 @@ What clicking and right-clicking do can be changed in the settings.
 - **Show on Map** marks a result on the world map and minimap. You can mark several at once. A marker that's off screen sits at the edge, pointing the way.
 - **Remove a marker** by right-clicking it and choosing **Remove Icon**, or from the result's menu. **Clear Markers** next to the status line (or the Clear Map Markers Hotkey) removes them all.
 - **Portals:** turn on Show Portals on the World Map to see every zone portal, asura gate, and dungeon, raid and fractal entrance, labelled with where they lead.
-- **New portals:** when you take a portal Tyria Search doesn't know, it offers to add it, then asks you to go back through for the return portal.
+- **New portals:** with Learn New Portals on, when you take a portal Tyria Search doesn't know, it offers to add it, then asks you to go back through for the return portal.
 
 ## Settings
 
@@ -74,10 +76,11 @@ Left-click the Tyria Search icon at the top left to open the settings, or press 
 ### Portals
 
 - **Show Portals on the World Map** (off) – mark every portal on the world map with the game's icons, labelled "To <map>" once you zoom in. Covers core Tyria through End of Dragons; later maps and the WvW borderlands have none yet.
-- **Learn New Portals** (on) – when you take a portal Tyria Search doesn't know, a panel at the top of the screen offers to add it, with where it leads and its kind, both editable. It then asks you to go back through it for the return portal (or press **Skip**). **Do Not Ask Again for This Location** never asks about a portal at that spot again.
+- **Learn New Portals** (off) – when you take a portal Tyria Search doesn't know, a panel at the top of the screen offers to add it, with where it leads and its kind, both editable. It then asks you to go back through it for the return portal (or press **Skip**). **Do Not Ask Again for This Location** never asks about a portal at that spot again, and **Do Not Ask Again for This Destination** never asks about portals to that map, from anywhere. Portals to and from fractals, guild halls, homesteads, the Mistlock Sanctuary, PvP and WvW are never asked about, since the game can take you there from anywhere and their exits lead back to where you came from.
 - **Learned Portals** list – every portal you've added, to edit or **Delete**.
 - **Forget Learned Portals** button – removes every portal you've added.
 - **Forget Ignored Locations** button – asks again about portals you chose Do Not Ask Again for This Location for.
+- **Forget Ignored Destinations** button – asks again about portals to maps you chose Do Not Ask Again for This Destination for.
 
 ### Chat
 

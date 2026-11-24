@@ -28,6 +28,11 @@ namespace Bytex.TyriaSearch
         /// <summary>The description, without its markup, for skills, traits, items, adventures and effects; null when there's none.</summary>
         [JsonProperty("d")] public string Description { get; set; }
         /// <summary>
+        /// Other words the entry is found by but doesn't show, in parts joined with " · " like <see cref="Context"/>: for
+        /// NPCs, what players call their services ("Cooking Station" for a master chef, "Vault" for a banker); null when none.
+        /// </summary>
+        [JsonProperty("t")] public string Keywords { get; set; }
+        /// <summary>
         /// A render service URL, <see cref="BundledIcon"/> and the name of one shipped with the module,
         /// or <see cref="AssetIcon"/> and a game asset id.
         /// </summary>
@@ -67,13 +72,27 @@ namespace Bytex.TyriaSearch
             Alternate = alternate;
             var languages = alternate == null ? new[] { entry } : new[] { entry, alternate };
             Names = languages.Select(e => SearchIndex.Normalize(e.Name)).ToArray();
-            ContextParts = languages.Select(e => (e.Context ?? "").Split(new[] { " · " }, StringSplitOptions.RemoveEmptyEntries)
+            // Keywords count as context parts, so "cooking station" ranks its NPCs like a map name ranks its landmarks.
+            ContextParts = languages.Select(e => ((e.Context ?? "") + " · " + (e.Keywords ?? "")).Split(new[] { " · " }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(SearchIndex.Normalize).ToArray()).ToArray();
             NamesWithContext = languages.Select(e => SearchIndex.Normalize(e.Kind == EntryKind.Portal
                 // "portal"/"gate" find every kind of portal; the map it's on (context) before the destination lets "from A to B" match in order
                 ? "portal gate from " + e.Context + " " + e.Name
-                : e.Name + " " + e.Context)).ToArray();
+                : e.Name + " " + e.Context + " " + e.Keywords)).ToArray();
         }
+    }
+
+    /// <summary>
+    /// Where the player is: the map id, and continent coordinates like <see cref="SearchEntry.X"/>, with the continent
+    /// of any map, since positions on different continents can't be compared.
+    /// </summary>
+    public readonly struct PlayerSpot
+    {
+        public readonly int MapId;
+        public readonly float X, Y;
+        public readonly Func<int, int> ContinentOf;
+        public PlayerSpot(int mapId, float x, float y, Func<int, int> continentOf) =>
+            (MapId, X, Y, ContinentOf) = (mapId, x, y, continentOf);
     }
 
     public sealed class SearchIndex
@@ -136,9 +155,16 @@ namespace Bytex.TyriaSearch
         /// a kind: every word starts a word of the name, a part of the context starts with the query (a map or area name
         /// lists its landmarks), every word is in the name, the words in query order across name and context (for portals, origin map then
         /// destination), then other matches that need the context.
-        /// Ties: player skills before unlabelled NPC copies, shorter names first.
+        /// Within each of the first three groups (exact names, names starting with the query, the rest), results on the
+        /// player's map come before the others, so the best match still wins but a nearby one beats one elsewhere.
+        /// Ties: the nearest first (on the player's continent), player skills before unlabelled NPC copies, shorter names first.
+        /// Results that differ only in their chat code (or id) are listed once (see <see cref="SameInfo"/>), except skills and
+        /// traits, whose tooltips (fetched by id) can still differ.
         /// </summary>
-        public List<SearchItem> Search(string query, Func<SearchItem, bool> filter, int max)
+        /// <param name="here">The player's map and continent position; null when unknown.</param>
+        /// <param name="preferred">Of results listed once, the one kept (e.g. a favourite); null for the first.</param>
+        public List<SearchItem> Search(string query, Func<SearchItem, bool> filter, int max, PlayerSpot? here = null,
+            Func<SearchItem, bool> preferred = null)
         {
             string trimmed = query?.Trim() ?? "";
             var exactLink = Find(trimmed); // a pasted chat code finds its entry
@@ -148,19 +174,47 @@ namespace Bytex.TyriaSearch
             if (normalized.Length == 0) return new List<SearchItem>();
             string[] words = normalized.Split(' ');
 
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             return _items
                 .Where(filter)
                 .Select(item => (item, score: Score(item, normalized, words)))
                 .Where(x => x.score >= 0)
                 .OrderBy(x => Math.Min(x.score, 2))
+                .ThenBy(x => here.HasValue && x.item.Entry.MapId == here.Value.MapId && x.item.Entry.X.HasValue ? 0 : 1)
                 .ThenBy(x => KindOrder[(int)x.item.Entry.Kind])
                 .ThenBy(x => x.score)
+                .ThenBy(x => DistanceFrom(here, x.item.Entry))
                 .ThenBy(x => string.IsNullOrEmpty(x.item.Entry.Context))
                 .ThenBy(x => x.item.Entry.Name.Length)
                 .ThenBy(x => x.item.Entry.Name, StringComparer.CurrentCultureIgnoreCase)
-                .Take(max)
+                .ThenBy(x => preferred != null && preferred(x.item) ? 0 : 1)
                 .Select(x => x.item)
+                .Where(item => item.Entry.Kind == EntryKind.Skill || item.Entry.Kind == EntryKind.Trait || seen.Add(SameInfo(item)))
+                .Take(max)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Everything a result shows except its chat code and id, in both languages: results with the same are the
+        /// same thing to the player (an item the game has several copies of) and are listed once.
+        /// </summary>
+        private static string SameInfo(SearchItem item) =>
+            Info(item.Entry) + "" + (item.Alternate == null ? "" : Info(item.Alternate));
+
+        private static string Info(SearchEntry e) => string.Join("",
+            (int)e.Kind, e.Name, e.Context, e.Description, e.Icon, e.Rarity, e.MapId, e.X, e.Y, e.Approximate, e.LinkIsNearestWaypoint);
+
+        /// <summary>
+        /// Squared distance from the player to an entry on their continent, on any map, since positions are continent
+        /// coordinates; for the rest (another continent, no position), the same for all.
+        /// </summary>
+        private static float DistanceFrom(PlayerSpot? here, SearchEntry entry)
+        {
+            if (!here.HasValue || !entry.X.HasValue || !entry.Y.HasValue) return float.MaxValue;
+            if (entry.MapId != here.Value.MapId && here.Value.ContinentOf(entry.MapId) != here.Value.ContinentOf(here.Value.MapId))
+                return float.MaxValue;
+            float dx = entry.X.Value - here.Value.X, dy = entry.Y.Value - here.Value.Y;
+            return dx * dx + dy * dy;
         }
 
         private static int Score(SearchItem item, string query, string[] words)

@@ -22,6 +22,8 @@ namespace Bytex.TyriaSearch
         [JsonProperty("from")] public string Origin { get; set; }
         /// <summary>Only for portals just noticed, not saved: the map the portal leads to.</summary>
         [JsonIgnore] public int DestinationMapId { get; set; }
+        /// <summary>Only for portals just noticed: that map's English name, which the player may rename the portal from.</summary>
+        [JsonIgnore] public string DestinationMap { get; set; }
 
         /// <summary>
         /// The portals in ref/portals.json, made from Tekkit's All-In-One marker pack, or the ones

@@ -14,21 +14,26 @@ namespace Bytex.WikiSearch
     /// </summary>
     internal class HintBox : Control
     {
+        // The same sizes as Tyria Search's game-style tooltips: a fixed-width content area, a 32 px icon beside the
+        // title in the large font, and the description below in the body font.
+        private const int ContentWidth = 320;
         private const int Spacing = 8;
         private const int BorderWidth = 2;
-        private const int IconSize = 48;
-        private const int TitleGap = 4;
+        private const int IconSize = 32;
+        private const int IconGap = 6;
+        private const int DescriptionGap = 6;
 
         // GW2 game asset: dark tooltip background.
         private static readonly AsyncTexture2D BackgroundTexture = AsyncTexture2D.FromAssetId(156003);
 
         private static BitmapFont TitleFont => GameService.Content.DefaultFont18;
-        private static BitmapFont TextFont => GameService.Content.DefaultFont16;
+        private static BitmapFont TextFont => GameService.Content.DefaultFont14;
 
         private readonly Texture2D _icon;
         private readonly string _title;
         private string _description;
-        private int _titleHeight;
+        private string _wrapped;
+        private int _headerHeight;
 
         public HintBox(Texture2D icon, string title, string description)
         {
@@ -43,13 +48,11 @@ namespace Bytex.WikiSearch
             set
             {
                 _description = value;
-                var titleSize = TitleFont.MeasureString(_title);
-                var textSize = TextFont.MeasureString(_description);
-                _titleHeight = (int)Math.Ceiling(titleSize.Height);
-                int textWidth = (int)Math.Ceiling(Math.Max(titleSize.Width, textSize.Width));
-                int textHeight = _titleHeight + TitleGap + (int)Math.Ceiling(textSize.Height);
+                _wrapped = DrawUtil.WrapText(TextFont, _description, ContentWidth);
+                _headerHeight = Math.Max(IconSize, TitleFont.LineHeight);
+                int textHeight = (int)Math.Ceiling(TextFont.MeasureString(_wrapped).Height);
                 int inset = BorderWidth + Spacing;
-                Size = new Point(inset * 2 + IconSize + Spacing + textWidth, inset * 2 + Math.Max(IconSize, textHeight));
+                Size = new Point(inset * 2 + ContentWidth, inset * 2 + _headerHeight + DescriptionGap + textHeight);
             }
         }
 
@@ -62,18 +65,18 @@ namespace Bytex.WikiSearch
             // Crop a piece of the 1024x1024 texture instead of squashing it into the box.
             spriteBatch.DrawOnCtrl(this, BackgroundTexture, bounds, new Rectangle(50, 50, bounds.Width, bounds.Height), Color.White);
 
-            var iconRect = new Rectangle(inset, inset, IconSize, IconSize);
-            spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, iconRect, Color.Black * 0.5f);
+            var iconRect = new Rectangle(inset, inset + (_headerHeight - IconSize) / 2, IconSize, IconSize);
             spriteBatch.DrawOnCtrl(this, _icon, iconRect);
 
-            int textX = iconRect.Right + Spacing;
-            var titleRect = new Rectangle(textX, inset, bounds.Width - textX, _titleHeight);
-            var textRect = new Rectangle(textX, titleRect.Bottom + TitleGap, bounds.Width - textX, bounds.Height - titleRect.Bottom - TitleGap);
+            int titleX = iconRect.Right + IconGap;
+            int titleY = inset + (_headerHeight - TitleFont.LineHeight) / 2;
+            var titleRect = new Rectangle(titleX, titleY, bounds.Width - titleX, TitleFont.LineHeight);
+            int textY = inset + _headerHeight + DescriptionGap;
+            var textRect = new Rectangle(inset, textY, bounds.Width - inset, bounds.Height - textY);
             DrawShadowedString(spriteBatch, _title, TitleFont, titleRect, ContentService.Colors.Chardonnay);
-            DrawShadowedString(spriteBatch, _description, TextFont, textRect, Color.White);
+            DrawShadowedString(spriteBatch, _wrapped, TextFont, textRect, Color.White);
 
             DrawBorder(spriteBatch, bounds.Size, Point.Zero, BorderWidth, Color.Black);
-            DrawBorder(spriteBatch, iconRect.Size, iconRect.Location, 1, Color.Black * 0.8f);
         }
 
         private void DrawBorder(SpriteBatch spriteBatch, Point size, Point at, int w, Color color)

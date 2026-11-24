@@ -103,6 +103,7 @@ namespace Bytex.TyriaSearch
 
         private readonly CancellationTokenSource _unloading = new CancellationTokenSource();
         // Wiki icons by URL, loaded on first use (UI thread only), and saved under wiki-icons so each is downloaded once.
+        // Also holds game icons that Blish HUD failed to download (see IconFor), fetched from the render service the same way.
         private readonly Dictionary<string, AsyncTexture2D> _wikiIcons = new Dictionary<string, AsyncTexture2D>();
         // Wiki icons dropped by Clear Cache, kept until unload since result rows may still draw them.
         private readonly List<AsyncTexture2D> _discardedWikiIcons = new List<AsyncTexture2D>();
@@ -171,9 +172,9 @@ namespace Bytex.TyriaSearch
             _iconRightClick = settings.DefineSetting("IconRightClick", IconAction.OpenSearch,
                 () => "Corner Icon Right Click Action",
                 () => "Defines the action of the corner icon when right clicked. Open Settings and Open Search close the window again if it's already open.");
-            _learnPortals = settings.DefineSetting("LearnPortals", true,
+            _learnPortals = settings.DefineSetting("LearnPortals", false,
                 () => "Learn New Portals",
-                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them. Spots you choose Do Not Ask Again for This Location for are saved to ignored-portals.json; Forget Ignored Locations clears them.");
+                () => "When you take a portal Tyria Search doesn't know, ask at the top of the screen whether to add it to the map and the search, named after where it took you, then ask you to go back through it for the return portal. Added portals are saved to learned-portals.json in the tyriasearch folder; Forget Learned Portals below removes them. Spots you choose Do Not Ask Again for This Location for are saved to ignored-portals.json; Forget Ignored Locations clears them. Maps you choose Do Not Ask Again for This Destination for are saved to ignored-destinations.json; Forget Ignored Destinations clears them. Portals to and from fractals, guild halls, homesteads, the Mistlock Sanctuary, PvP and WvW are never asked about, since the game takes you there from anywhere and their exits lead back to where you came from.");
             // Never enabled: it's the key to press in the game, not a Blish HUD hotkey.
             _gameMapKey = settings.DefineSetting("GameMapKey", new KeyBinding(Microsoft.Xna.Framework.Input.Keys.M),
                 () => "Game's Map Key",
@@ -259,7 +260,8 @@ namespace Bytex.TyriaSearch
             new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _keepSearchOpenOnMap, _zoomOutMap, _gameMapKey, _showOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals),
-                ("Forget Ignored Locations", "Ask again about portals at every spot you chose Do Not Ask Again for This Location for.", ForgetIgnoredLocations))
+                ("Forget Ignored Locations", "Ask again about portals at every spot you chose Do Not Ask Again for This Location for.", ForgetIgnoredLocations),
+                ("Forget Ignored Destinations", "Ask again about portals to every map you chose Do Not Ask Again for This Destination for. Portals to and from fractals, guild halls, homesteads, the Mistlock Sanctuary, PvP and WvW are never asked about.", ForgetIgnoredDestinations))
                 { BuildExtra = panel => LearnedPortalsList.Build(panel, _portalLearner) },
             new SettingsSection("Chat", new SettingEntry[] { _overwriteUnsentText, _switchBackToSay, _keyDelayMs }))
         {
@@ -286,7 +288,7 @@ namespace Bytex.TyriaSearch
 
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
             _data = new Gw2Data(directory, ModuleParameters.Manifest.Version.ToString());
-            Tooltips = new GameTooltips(_data, () => _indexLanguages[0], IconFor, BundledIconFor, _unloading.Token);
+            Tooltips = new GameTooltips(_data, () => _indexLanguages[0], IconFor, RenderIcon, BundledIconFor, _unloading.Token);
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
             foreach (string name in KindIconNames.Concat(Gw2Data.BundledIconNames).Distinct())
@@ -296,9 +298,10 @@ namespace Bytex.TyriaSearch
             _mapMarker.RemoveRequested += MapMarker_RemoveRequested;
             using (var portals = ModuleParameters.ContentsManager.GetFileStream("portals.json"))
                 _bundledPortals = Portal.Load(portals);
-            _portalLearner = new PortalLearner(directory);
+            using (var ignoredDestinations = ModuleParameters.ContentsManager.GetFileStream("ignored-destinations.json"))
+                _portalLearner = new PortalLearner(directory, ignoredDestinations);
             _portalLearner.Changed += PortalLearner_Changed;
-            _portalReview = new PortalReview(AddLearnedPortal, DiscardLearnedPortal, IgnorePortal, _portalLearner.CancelReturn,
+            _portalReview = new PortalReview(AddLearnedPortal, DiscardLearnedPortal, IgnorePortal, IgnorePortalDestination, _portalLearner.CancelReturn,
                 () => _portalPanelX.Value == NoPosition ? (Point?)null : new Point(_portalPanelX.Value, _portalPanelY.Value),
                 point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
             SetPortals();
@@ -392,6 +395,25 @@ namespace Bytex.TyriaSearch
             ScreenNotification.ShowNotification($"Tyria Search won't ask about this portal on {portal.Origin} again.");
         }
 
+        private void IgnorePortalDestination(Portal portal, bool isReturn)
+        {
+            _portalLearner.IgnoreDestination(portal.DestinationMap);
+            DiscardLearnedPortal(portal, isReturn);
+            ScreenNotification.ShowNotification($"Tyria Search won't ask about portals to {portal.DestinationMap} again.");
+        }
+
+        private void ForgetIgnoredDestinations()
+        {
+            int count = _portalLearner.IgnoredDestinations.Count;
+            if (count == 0)
+            {
+                ScreenNotification.ShowNotification("Tyria Search has no ignored portal destinations.");
+                return;
+            }
+            _portalLearner.ForgetIgnoredDestinations();
+            ScreenNotification.ShowNotification($"Tyria Search will ask about portals to {count} ignored destination{(count == 1 ? "" : "s")} again.");
+        }
+
         private void ForgetIgnoredLocations()
         {
             int count = _portalLearner.Ignored.Count;
@@ -421,7 +443,15 @@ namespace Bytex.TyriaSearch
             _window.Update();
             LearnPortals();
             _mapMarker.Size = GameService.Graphics.SpriteScreen.Size;
-            if (_cornerIcon.Icon != null) _cornerIcon.Icon.LoadingMessage = Downloading ? _status : null;
+            var icon = _cornerIcon.Icon;
+            string loading = Downloading ? _status : null;
+            if (icon != null && icon.LoadingMessage != loading)
+            {
+                icon.LoadingMessage = loading;
+                // Blish HUD only clears the loading tooltip if the mouse is on the icon when loading ends;
+                // otherwise the last message stays as its tooltip for good.
+                if (loading == null) icon.BasicTooltipText = null;
+            }
         }
 
         protected override void Unload()
@@ -553,19 +583,44 @@ namespace Bytex.TyriaSearch
             // pages give the wiki's placeholder: both show the kind's bundled icon.
             if (Gw2Data.IsMissingIcon(icon) || icon.StartsWith(SearchEntry.BundledIcon)) return BundledIconFor(entry);
             if (icon.StartsWith(Gw2Data.WikiImages)) return WikiIcon(icon);
-            return GameService.Content.GetRenderServiceTexture(icon);
+            return RenderIcon(icon);
         }
 
-        /// <summary>An icon from the wiki: unswapped (so the bundled placeholder shows) until it has loaded from disk or downloaded, and stays so if that fails.</summary>
-        private AsyncTexture2D WikiIcon(string url)
+        /// <summary>
+        /// A render service icon by URL. Blish HUD only holds it weakly, so a caller drawing it every frame must keep it
+        /// (asking again after it's collected gives a fresh, transparent texture until it reloads: a flicker), and ask
+        /// again if <see cref="IsErrorTexture"/>, for the module's own download.
+        /// </summary>
+        internal AsyncTexture2D RenderIcon(string icon)
+        {
+            if (string.IsNullOrEmpty(icon)) return null;
+            if (_wikiIcons.TryGetValue(icon, out var fallback)) return fallback;
+            // Blish HUD fetches render service icons from its asset mirror. If that fails (it can time out on hundreds at once),
+            // Blish swaps in its error texture (a pink square with a blue X) and keeps returning it for the session. So the
+            // module downloads the icon from the render service itself; rows built later pick it up.
+            var texture = GameService.Content.GetRenderServiceTexture(icon);
+            return IsErrorTexture(texture) ? WikiIcon(icon, trim: false) : texture;
+        }
+
+        /// <summary>Whether an icon has arrived and can be drawn: not still downloading, nor Blish HUD's error texture after a failed download.</summary>
+        internal static bool IsLoaded(AsyncTexture2D icon) => icon != null && icon.HasSwapped && !IsErrorTexture(icon);
+
+        /// <summary>Whether Blish HUD gave up downloading the icon and swapped in its error texture.</summary>
+        internal static bool IsErrorTexture(AsyncTexture2D icon) => icon?.Texture == ContentService.Textures.Error;
+
+        /// <summary>
+        /// An icon downloaded by the module (from the wiki, or the render service as a fallback): unswapped (so the bundled
+        /// placeholder shows) until it has loaded from disk or downloaded, and stays so if that fails.
+        /// </summary>
+        private AsyncTexture2D WikiIcon(string url, bool trim = true)
         {
             if (_wikiIcons.TryGetValue(url, out var texture)) return texture;
             texture = _wikiIcons[url] = new AsyncTexture2D();
-            _ = LoadWikiIconAsync(url, texture);
+            _ = LoadWikiIconAsync(url, texture, trim);
             return texture;
         }
 
-        private async Task LoadWikiIconAsync(string url, AsyncTexture2D texture)
+        private async Task LoadWikiIconAsync(string url, AsyncTexture2D texture, bool trim)
         {
             string file;
             using (var sha = System.Security.Cryptography.SHA1.Create())
@@ -584,12 +639,15 @@ namespace Bytex.TyriaSearch
                 if (_unloading.IsCancellationRequested) return;
                 using (var stream = new System.IO.MemoryStream(bytes))
                 using (var context = GameService.Graphics.LendGraphicsDeviceContext())
-                    texture.SwapTexture(TrimPadding(context.GraphicsDevice, TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream)));
+                {
+                    var loaded = TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream);
+                    texture.SwapTexture(trim ? TrimPadding(context.GraphicsDevice, loaded) : loaded);
+                }
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
                 Blocked.Check(ex, file);
-                Logger.Debug(ex, $"Couldn't load the wiki icon {url}.");
+                Logger.Debug(ex, $"Couldn't load the icon {url}.");
             }
         }
 
@@ -1022,7 +1080,7 @@ namespace Bytex.TyriaSearch
         };
 
         /// <summary>Tyria (1) or the Mists (2); maps the data doesn't know are taken to be in Tyria.</summary>
-        private int ContinentOf(int mapId) => _continents.TryGetValue(mapId, out int continent) ? continent : 1;
+        internal int ContinentOf(int mapId) => _continents.TryGetValue(mapId, out int continent) ? continent : 1;
 
         // ---- Actions ----
 

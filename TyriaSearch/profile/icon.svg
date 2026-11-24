@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+<defs><mask id="m1" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/><circle cx="25" cy="25" r="13.2" fill="#000000"/></mask></defs>
+<g mask="url(#m1)">
+<line x1="25" y1="25" x2="53.6" y2="53.6" stroke="#3a341e" stroke-width="14.6" stroke-linecap="round"/>
+<line x1="25" y1="25" x2="53.6" y2="53.6" stroke="#cdbe8c" stroke-width="8.6" stroke-linecap="round"/>
+<circle cx="25" cy="25" r="22.5" fill="#3a341e"/>
+<circle cx="25" cy="25" r="19.9" fill="#cdbe8c"/>
+<circle cx="25" cy="25" r="15.6" fill="#3a341e"/>
+</g>
+<circle cx="25" cy="25" r="13.2" fill="#e5e0c8" fill-opacity="0.588"/>
+<path d="M15.157 21.802A10.35 10.35 0 0 1 21.802 15.157" fill="none" stroke="#fcfbf0" stroke-width="1.7" stroke-linecap="round" stroke-opacity="0.945"/>
+</svg>

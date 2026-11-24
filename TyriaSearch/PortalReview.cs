@@ -26,6 +26,7 @@ namespace Bytex.TyriaSearch
         private readonly Action<Portal, bool> _add;
         private readonly Action<Portal, bool> _discard;
         private readonly Action<Portal, bool> _ignore;
+        private readonly Action<Portal, bool> _ignoreDestination;
         private readonly Action _skipReturn;
         private readonly Queue<Candidate> _queue = new Queue<Candidate>();
 
@@ -33,7 +34,7 @@ namespace Bytex.TyriaSearch
         private readonly Label _origin, _destinationLabel, _kindLabel, _hint;
         private readonly TextBox _destination;
         private readonly Dropdown _kind;
-        private readonly StandardButton _addButton, _discardButton, _ignoreButton, _skipButton;
+        private readonly StandardButton _addButton, _discardButton, _ignoreButton, _ignoreDestinationButton, _skipButton;
 
         private readonly Func<Point?> _savedPosition;
         private readonly Action<Point> _savePosition;
@@ -46,10 +47,12 @@ namespace Bytex.TyriaSearch
         /// <param name="add">Adds the reviewed portal; true for a return portal.</param>
         /// <param name="discard">The player didn't want the portal; true for a return portal.</param>
         /// <param name="ignore">The player never wants to be asked about this spot again; true for a return portal.</param>
+        /// <param name="ignoreDestination">The player never wants to be asked about portals to where this one leads; true for a return portal.</param>
         /// <param name="skipReturn">The player won't go back for the return portal.</param>
         /// <param name="savedPosition">Where the player last put the panel, or null for the top centre.</param>
         /// <param name="savePosition">Called when the player has dragged the panel.</param>
-        public PortalReview(Action<Portal, bool> add, Action<Portal, bool> discard, Action<Portal, bool> ignore, Action skipReturn,
+        public PortalReview(Action<Portal, bool> add, Action<Portal, bool> discard, Action<Portal, bool> ignore,
+            Action<Portal, bool> ignoreDestination, Action skipReturn,
             Func<Point?> savedPosition, Action<Point> savePosition)
         {
             _savedPosition = savedPosition;
@@ -57,6 +60,7 @@ namespace Bytex.TyriaSearch
             _add = add;
             _discard = discard;
             _ignore = ignore;
+            _ignoreDestination = ignoreDestination;
             _skipReturn = skipReturn;
 
             _panel = new Panel
@@ -95,6 +99,10 @@ namespace Bytex.TyriaSearch
                 Parent = _panel, Location = new Point(5, 168), Size = new Point(width, 26), Text = "Do Not Ask Again for This Location",
                 BasicTooltipText = "Don't add the portal, and never ask about a portal here again. Saved to ignored-portals.json in the tyriasearch folder; Forget Ignored Locations in the settings clears them.",
             };
+            _ignoreDestinationButton = new StandardButton
+            {
+                Parent = _panel, Location = new Point(5, 200), Size = new Point(width, 26), Text = "Do Not Ask Again for This Destination",
+            };
             _skipButton = new StandardButton
             {
                 Parent = _panel, Location = new Point(5, 136), Size = new Point(width, 26), Text = "Skip",
@@ -103,6 +111,7 @@ namespace Bytex.TyriaSearch
             _addButton.Click += (_, __) => Close(Choice.Add);
             _discardButton.Click += (_, __) => Close(Choice.Discard);
             _ignoreButton.Click += (_, __) => Close(Choice.Ignore);
+            _ignoreDestinationButton.Click += (_, __) => Close(Choice.IgnoreDestination);
             _skipButton.Click += (_, __) => _skipReturn();
             _panel.LeftMouseButtonPressed += (_, __) => _dragOffset = GameService.Input.Mouse.Position - _panel.Location;
         }
@@ -160,6 +169,8 @@ namespace Bytex.TyriaSearch
             _origin.Text = $"On {portal.Origin}";
             _destination.Text = portal.Destination;
             _kind.SelectedItem = Portal.KindLabel(portal.Kind);
+            _ignoreDestinationButton.BasicTooltipText = $"Don't add the portal, and never ask about a portal to {portal.DestinationMap} again, from anywhere. "
+                + "Saved to ignored-destinations.json in the tyriasearch folder; Forget Ignored Destinations in the settings clears them.";
             _hint.Text = candidate.IsReturn ? "This is the way back through the portal you just added."
                 : returnPrompt != null ? $"After adding, go back through it to {returnPrompt} to add the return portal too."
                 : "Tyria Search doesn't know this portal yet. Add it to the map and the search?";
@@ -177,11 +188,11 @@ namespace Bytex.TyriaSearch
         private void SetEditing(bool editing)
         {
             _destinationLabel.Visible = _destination.Visible = _kindLabel.Visible = _kind.Visible = editing;
-            _addButton.Visible = _discardButton.Visible = _ignoreButton.Visible = editing;
+            _addButton.Visible = _discardButton.Visible = _ignoreButton.Visible = _ignoreDestinationButton.Visible = editing;
             _skipButton.Visible = !editing;
         }
 
-        private enum Choice { Add, Discard, Ignore }
+        private enum Choice { Add, Discard, Ignore, IgnoreDestination }
 
         private void Close(Choice choice)
         {
@@ -191,6 +202,10 @@ namespace Bytex.TyriaSearch
             if (choice == Choice.Discard)
             {
                 _discard(portal, candidate.IsReturn);
+            }
+            else if (choice == Choice.IgnoreDestination)
+            {
+                _ignoreDestination(portal, candidate.IsReturn);
             }
             else
             {

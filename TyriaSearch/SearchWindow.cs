@@ -256,6 +256,15 @@ namespace Bytex.TyriaSearch
             CopyTopResult();
         }
 
+        /// <summary>The player's map and position, read when a search starts; null while Mumble has none.</summary>
+        private PlayerSpot? PlayerSpot()
+        {
+            var mumble = GameService.Gw2Mumble;
+            if (!mumble.IsAvailable || mumble.CurrentMap.Id == 0) return null;
+            var position = mumble.RawClient.PlayerLocationMap; // continent coordinates
+            return new PlayerSpot(mumble.CurrentMap.Id, (float)position.X, (float)position.Y, _module.ContinentOf);
+        }
+
         private void CopyTopResult()
         {
             _enterQueued = false;
@@ -273,6 +282,7 @@ namespace Bytex.TyriaSearch
             var filter = _categories.First(c => c.label == _category.SelectedItem).filter;
             var favourites = _module.Favourites;
             int version = ++_searchVersion;
+            var here = PlayerSpot();
 
             // Straight to the wiki; ShowResults asks it.
             if (WikiSelected)
@@ -287,7 +297,7 @@ namespace Bytex.TyriaSearch
                 {
                     var items = query.Trim().Length == 0
                         ? favourites.Select(index.Find).Where(i => i != null && filter(i)).ToList()
-                        : index.Search(query, filter, MaxResults);
+                        : index.Search(query, filter, MaxResults, here, i => favourites.Contains(i.Entry.Key));
                     _pending = new Results { Version = version, Query = query, Items = items };
                 }
                 catch (Exception ex)

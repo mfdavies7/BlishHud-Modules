@@ -68,6 +68,60 @@ namespace Bytex.TyriaSearch
             ["Fishmonger"] = "map_vendor",
             ["Fishing Supplies"] = "map_vendor",
             ["Bartender"] = "map_vendor",
+            ["Ley Line Crystal"] = "map_vendor_leyline_crystals",
+            ["Trainer"] = "map_profession_trainer",
+            ["Raid"] = "map_raid_entrance",
+        };
+
+        // Wiki service names to the wiki's "<name> (map icon).png" files (or a whole file page name), for services the
+        // API has no icon of their own for. Looked up before ServiceIcons, which is the fallback.
+        private static readonly Dictionary<string, string> WikiServiceIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Gathering Merchant"] = "Gathering Merchant",
+            ["Karma merchant"] = "Karma Merchant",
+            ["Research Merchant"] = "Research Merchant",
+            ["Faction Provisioner"] = "Faction Provisioner",
+            ["Bandit Crest Collector"] = "Bandit Crest Collector",
+            ["Volatile Magic"] = "Volatile Magic Collector",
+            ["Unbound Magic"] = "Unbound Magic Collector",
+            ["Collector of Unusual Coins"] = "Unusual Coin",
+            ["Guardian trainer"] = "Guardian trainer",
+            ["Warrior trainer"] = "Warrior trainer",
+            ["Ranger trainer"] = "Ranger trainer",
+            ["Necromancer trainer"] = "Necromancer trainer",
+            ["Engineer trainer"] = "Engineer trainer",
+            ["Mesmer trainer"] = "Mesmer trainer",
+            ["Elementalist trainer"] = "Elementalist trainer",
+            ["Thief trainer"] = "Thief trainer",
+            ["Scout"] = "Scout",
+            ["Pact Supply Network Agent"] = "Pact Supply Network Agent",
+            ["Transport Facilitator"] = "Transport Facilitator",
+            ["Dodge Instructor"] = "Dodge Instructor",
+            ["Heroics Notary"] = "Heroics Notary",
+            ["Guild Initiative Notary"] = "Guild Initiative Notary",
+            ["Guild Hall Explorer"] = "Guild Hall Explorer",
+            ["Tavern Proprietor"] = "Tavern Proprietor",
+            ["Arena Proprietor"] = "Arena Proprietor",
+            ["Workshop Proprietor"] = "Workshop Proprietor",
+            ["Market Proprietor"] = "Market Proprietor",
+            ["War Room Proprietor"] = "War Room Proprietor",
+            ["Mine Proprietor"] = "Mine Proprietor",
+            ["Guild Trader"] = "Guild Trader",
+            ["Guild Miniature Merchant"] = "Guild Miniatures",
+            ["Guild Enhancements"] = "Guild Enhancements",
+            ["Guild Sound Technician"] = "Guild Sound Technician",
+            ["Resonance Technician"] = "Resonance Technician",
+            ["Gardener"] = "Gardener",
+            ["Makeover Preview"] = "Makeover Preview",
+            ["Jade Bot Workbench"] = "Jade Bot Workbench",
+            ["Region Lore"] = "Region Lore",
+            ["Raptor Taxi"] = "Raptor Taxi",
+            ["Activity"] = "Activity",
+            ["Repairs"] = "Repairs",
+            ["Siege Master (WvW)"] = "Siege Master",
+            ["Quaestor (service)"] = "Quaestor",
+            ["Belcher's Bluff"] = "Belcher's Bluff",
+            ["Handiworker"] = "File:Handiworker tango icon 48px.png", // the wiki has no map icon for it
         };
 
         // Live wiki results: location types and page types to /v2/files icon ids.
@@ -105,56 +159,113 @@ namespace Bytex.TyriaSearch
                 var services = npc.Services ?? new List<string>();
                 string serviceText = string.Join(" · ", services.Select(s => ServiceNames.TryGetValue(s, out var alias) ? alias : s));
                 string icon = ServiceIcon(services, npcs.Icons) ?? npc.Icon;
-
-                var coordinates = npc.Coordinates ?? new List<float[]>();
-                var used = new bool[coordinates.Count];
-                var placed = new HashSet<(int, int, int)>(); // two wiki names, or a name and coordinates, for the same spot
-                var npcEntries = new List<SearchEntry>();
-                var unplaced = new List<string>();
-
-                void Add(string key, Placement placement, string fallbackContext)
+                string keywords = Keywords(services);
+                foreach (var (key, placement, fallbackContext) in NpcPlacements(npc, places))
                 {
-                    if (placement.X.HasValue && !placed.Add((placement.MapId, (int)placement.X.Value / 10, (int)placement.Y.Value / 10))) return;
-                    npcEntries.Add(Entry(EntryKind.Npc, $"npc:{npc.Title}@{key}", npc.Title, placement, places, fallbackContext, serviceText, icon));
+                    var entry = Entry(EntryKind.Npc, $"npc:{npc.Title}@{key}", npc.Title, placement, places, fallbackContext, serviceText, icon);
+                    entry.Keywords = keywords;
+                    entries.Add(entry);
                 }
-
-                foreach (string location in (npc.Locations ?? new List<string>()).Take(MaxLocationsPerEntry))
-                {
-                    var found = places.Find(location);
-                    if (!found.HasValue)
-                    {
-                        unplaced.Add(location); // a region like "Kryta"
-                        continue;
-                    }
-
-                    var placement = found.Value;
-                    int exact = ClosestUnused(coordinates, used, placement, places);
-                    if (exact >= 0)
-                    {
-                        used[exact] = true;
-                        placement.X = coordinates[exact][0];
-                        placement.Y = coordinates[exact][1];
-                        placement.Approximate = false;
-                    }
-                    Add(location, placement, null);
-                }
-
-                for (int i = 0; i < coordinates.Count; i++)
-                {
-                    if (used[i]) continue;
-                    var at = places.At(coordinates[i][0], coordinates[i][1]);
-                    if (at.HasValue) Add($"{at.Value.MapId}:{(int)coordinates[i][0]},{(int)coordinates[i][1]}", at.Value, null);
-                }
-
-                // Only when nothing better is known: the region text, or no location at all.
-                if (npcEntries.Count == 0)
-                {
-                    if (unplaced.Count == 0) unplaced.Add(null);
-                    foreach (string location in unplaced) Add(location ?? "", new Placement(), location);
-                }
-                entries.AddRange(npcEntries);
             }
             return entries;
+        }
+
+        // What players search for to find an NPC by service, beyond the service's name: what's beside them (a master
+        // craftsman stands at their discipline's station, named as the wiki's Crafting station page has them) and
+        // other names for it. Every crafting discipline is also found by "crafting station".
+        private static readonly Dictionary<string, string[]> ServiceKeywords = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Armorsmith"] = new[] { "Armorsmithing Station", "Crafting Station", "Armorsmithing" },
+            ["Artificer"] = new[] { "Artificing Station", "Crafting Station", "Artificing" },
+            ["Chef"] = new[] { "Cooking Station", "Crafting Station", "Cooking", "Cook" },
+            ["Handiworker"] = new[] { "Handiwork Workbench", "Crafting Station", "Handiwork" },
+            ["Huntsman"] = new[] { "Huntsman's Station", "Crafting Station" },
+            ["Jeweler"] = new[] { "Jeweling Station", "Crafting Station", "Jeweling", "Jeweller" },
+            ["Leatherworker"] = new[] { "Leatherworking Station", "Crafting Station", "Leatherworking" },
+            ["Scribe"] = new[] { "Scribing Station", "Crafting Station", "Scribing" },
+            ["Tailor"] = new[] { "Tailoring Station", "Crafting Station", "Tailoring" },
+            ["Weaponsmith"] = new[] { "Weaponsmithing Station", "Crafting Station", "Weaponsmithing" },
+            ["Mystic Forge"] = new[] { "Forge" },
+            ["Account vault"] = new[] { "Account Vault", "Vault", "Banker", "Material Storage" },
+            ["Guild Vault"] = new[] { "Guild Vault", "Guild Storage" },
+            ["Trading Post"] = new[] { "Black Lion Trader", "TP", "Trader" },
+            ["Reinforce Armor"] = new[] { "Repair Anvil", "Armor Repair", "Anvil" },
+            ["Trainer"] = new[] { "Profession Trainer" },
+            ["Commander Trainer"] = new[] { "Commander Tag" },
+            ["Karma merchant"] = new[] { "Karma" },
+            ["Laurel Merchant"] = new[] { "Laurels" },
+            ["Dungeon Merchant"] = new[] { "Dungeon Tokens" },
+            ["Legendary vendor"] = new[] { "Legendary" },
+            ["Pact Supply Network Agent"] = new[] { "PSNA" },
+        };
+
+        /// <summary>The keywords of an NPC's services (see <see cref="ServiceKeywords"/>), joined with " · "; null when none.</summary>
+        private static string Keywords(IEnumerable<string> services)
+        {
+            var keywords = services
+                .SelectMany(s => ServiceKeywords.TryGetValue(s, out var words) ? words
+                    // A profession's trainer ("Guardian trainer") is a profession trainer too.
+                    : s.EndsWith(" trainer", StringComparison.OrdinalIgnoreCase) ? new[] { "Profession Trainer" }
+                    : Array.Empty<string>())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return keywords.Count == 0 ? null : string.Join(" · ", keywords);
+        }
+
+        /// <summary>
+        /// Where an NPC is: each named location with the wiki coordinates inside its map, else its area's centre; then
+        /// coordinates no location accounted for; failing both, the region text ("Kryta") or nothing, unplaced. Each comes
+        /// with a key that tells the NPC's spots apart, and the text to show for where it is when it isn't placed.
+        /// </summary>
+        private static List<(string key, Placement placement, string fallbackContext)> NpcPlacements(Gw2Data.WikiNpc npc, Places places)
+        {
+            var coordinates = npc.Coordinates ?? new List<float[]>();
+            var used = new bool[coordinates.Count];
+            var placed = new HashSet<(int, int, int)>(); // two wiki names, or a name and coordinates, for the same spot
+            var result = new List<(string, Placement, string)>();
+            var unplaced = new List<string>();
+
+            void Add(string key, Placement placement, string fallbackContext)
+            {
+                if (placement.X.HasValue && !placed.Add((placement.MapId, (int)placement.X.Value / 10, (int)placement.Y.Value / 10))) return;
+                result.Add((key, placement, fallbackContext));
+            }
+
+            foreach (string location in (npc.Locations ?? new List<string>()).Take(MaxLocationsPerEntry))
+            {
+                var found = places.Find(location);
+                if (!found.HasValue)
+                {
+                    unplaced.Add(location); // a region like "Kryta"
+                    continue;
+                }
+
+                var placement = found.Value;
+                int exact = ClosestUnused(coordinates, used, placement, places);
+                if (exact >= 0)
+                {
+                    used[exact] = true;
+                    placement.X = coordinates[exact][0];
+                    placement.Y = coordinates[exact][1];
+                    placement.Approximate = false;
+                }
+                Add(location, placement, null);
+            }
+
+            for (int i = 0; i < coordinates.Count; i++)
+            {
+                if (used[i]) continue;
+                var at = places.At(coordinates[i][0], coordinates[i][1]);
+                if (at.HasValue) Add($"{at.Value.MapId}:{(int)coordinates[i][0]},{(int)coordinates[i][1]}", at.Value, null);
+            }
+
+            // Only when nothing better is known: the region text, or no location at all.
+            if (result.Count == 0)
+            {
+                if (unplaced.Count == 0) unplaced.Add(null);
+                foreach (string location in unplaced) Add(location ?? "", new Placement(), location);
+            }
+            return result;
         }
 
         /// <summary>
@@ -236,8 +347,12 @@ namespace Bytex.TyriaSearch
             return entries;
         }
 
+        /// <summary>The first service's own icon that's known: the wiki's map icon for it, else the API's.</summary>
         private static string ServiceIcon(IEnumerable<string> services, Dictionary<string, string> icons) =>
-            FileIcon(services.Select(s => ServiceIcons.TryGetValue(s, out var id) ? id : null).FirstOrDefault(id => id != null), icons);
+            services.Select(s => WikiServiceIcons.TryGetValue(s, out var file)
+                                     ? Gw2Data.WikiFileUrl(file.StartsWith("File:", StringComparison.Ordinal) ? file : $"File:{file} (map icon).png")
+                                 : FileIcon(ServiceIcons.TryGetValue(s, out var id) ? id : null, icons))
+                    .FirstOrDefault(url => url != null);
 
         private static string FileIcon(string id, Dictionary<string, string> icons) =>
             id != null && icons != null && icons.TryGetValue(id, out var url) ? url : null;

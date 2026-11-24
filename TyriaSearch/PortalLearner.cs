@@ -16,6 +16,9 @@ namespace Bytex.TyriaSearch
     /// After a new portal, the next portal noticed straight back is taken as its return portal (see <see cref="ExpectReturn"/>);
     /// while the player is asked to go back, that trip skips the checks above, as they know it's through the return portal.
     /// Spots the player said not to ask about again are saved to ignored-portals.json, in the same format, and never asked about.
+    /// Nor are portals to the destinations in ref/ignored-destinations.json (places joined from anywhere through the game's
+    /// panels, such as fractals, guild halls, PvP and WvW) or ones the player added, saved to ignored-destinations.json.
+    /// Portals from the bundled ones aren't either: their exits lead back to wherever the player came from.
     /// </summary>
     internal sealed class PortalLearner
     {
@@ -28,8 +31,11 @@ namespace Bytex.TyriaSearch
         private static readonly TimeSpan MovedWithin = TimeSpan.FromSeconds(5); // dungeon entrances ask first
         private static readonly TimeSpan MapClosedFor = TimeSpan.FromSeconds(2);
 
-        private readonly string _path, _ignoredPath;
+        private readonly string _path, _ignoredPath, _ignoredDestinationsPath;
         private readonly List<Portal> _learned, _ignored;
+        // English map names, as the API gives them; some have stray spaces.
+        private readonly HashSet<string> _bundledIgnoredDestinations;
+        private readonly List<string> _ignoredDestinations;
 
         // The last Mumble update; it stops during loading screens, so these hold the spot before one.
         private int _tick, _mapId;
@@ -40,18 +46,25 @@ namespace Bytex.TyriaSearch
         // The return trip being waited for: from the map a new portal led to, back to the map it was on.
         private int _returnFrom, _returnTo;
 
-        public PortalLearner(string directory)
+        /// <param name="bundledIgnoredDestinations">The contents of ref/ignored-destinations.json.</param>
+        public PortalLearner(string directory, Stream bundledIgnoredDestinations)
         {
             _path = Path.Combine(directory, "learned-portals.json");
             _learned = Load(_path);
             _ignoredPath = Path.Combine(directory, "ignored-portals.json");
             _ignored = Load(_ignoredPath);
+            _bundledIgnoredDestinations = new HashSet<string>(ReadNames(bundledIgnoredDestinations).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+            _ignoredDestinationsPath = Path.Combine(directory, "ignored-destinations.json");
+            _ignoredDestinations = LoadNames(_ignoredDestinationsPath);
         }
 
         public IReadOnlyList<Portal> Learned => _learned;
 
         /// <summary>The spots the player said not to ask about again.</summary>
         public IReadOnlyList<Portal> Ignored => _ignored;
+
+        /// <summary>The destinations the player said not to ask about portals to; not the bundled ones.</summary>
+        public IReadOnlyList<string> IgnoredDestinations => _ignoredDestinations;
 
         /// <summary>The learned portals changed and were saved: true when portals were added or removed, false for an edit.</summary>
         public event Action<bool> Changed;
@@ -69,6 +82,33 @@ namespace Bytex.TyriaSearch
                 Logger.Warn(ex, $"Couldn't read {path}; starting it again.");
             }
             return new List<Portal>();
+        }
+
+        private static List<string> ReadNames(Stream json)
+        {
+            using (var reader = new JsonTextReader(new StreamReader(json)))
+                return new JsonSerializer().Deserialize<List<string>>(reader) ?? new List<string>();
+        }
+
+        private static List<string> LoadNames(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    using (var stream = File.OpenRead(path))
+                        return ReadNames(stream);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"Couldn't read {path}; starting it again.");
+            }
+            return new List<string>();
+        }
+
+        private bool IsIgnoredDestination(string map)
+        {
+            map = map.Trim();
+            return _bundledIgnoredDestinations.Contains(map) || _ignoredDestinations.Any(d => string.Equals(d.Trim(), map, StringComparison.OrdinalIgnoreCase));
         }
 
         public bool ExpectingReturn => _returnFrom != 0;
@@ -141,7 +181,11 @@ namespace Bytex.TyriaSearch
             int? continent = places.ContinentOf(fromMap);
             string destination = places.EnglishMapName(toMap);
             if (continent == null || !places.Contains(fromMap, x, y)) return Skip("not on a map the API places on a continent");
+            string origin = places.EnglishMapName(fromMap);
+            if (origin != null && _bundledIgnoredDestinations.Contains(origin.Trim())) return Skip($"portals from {origin} aren't learned");
             if (destination == null) return Skip("destination map unknown to the API");
+            // Fractals, guild halls and the like are joined from anywhere, so the spot before says nothing.
+            if (IsIgnoredDestination(destination)) return Skip($"portals to {destination} aren't learned");
 
             float DistanceSquared(Portal p) => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y);
             bool Near(Portal p) => p.MapId == fromMap && (DistanceSquared(p) < AnyPortalRadius * AnyPortalRadius
@@ -156,8 +200,8 @@ namespace Bytex.TyriaSearch
             return new Portal
             {
                 MapId = fromMap, Continent = continent.Value, X = (float)Math.Round(x, 1), Y = (float)Math.Round(y, 1),
-                Kind = PortalKind.Zone, Destination = destination, Origin = places.EnglishMapName(fromMap),
-                DestinationMapId = toMap,
+                Kind = PortalKind.Zone, Destination = destination, Origin = origin,
+                DestinationMapId = toMap, DestinationMap = destination,
             };
         }
 
@@ -202,14 +246,31 @@ namespace Bytex.TyriaSearch
             Save(_ignored, _ignoredPath);
         }
 
+        /// <summary>Never asks about a portal to this map again, from anywhere.</summary>
+        /// <param name="map">The destination's English map name, not the name the player gave the portal.</param>
+        public void IgnoreDestination(string map)
+        {
+            if (string.IsNullOrWhiteSpace(map) || IsIgnoredDestination(map)) return;
+            _ignoredDestinations.Add(map.Trim());
+            Save(_ignoredDestinations.Select(n => JsonConvert.SerializeObject(n)), _ignoredDestinationsPath);
+        }
+
+        public void ForgetIgnoredDestinations()
+        {
+            _ignoredDestinations.Clear();
+            Save(_ignoredDestinations.Select(n => JsonConvert.SerializeObject(n)), _ignoredDestinationsPath);
+        }
+
         private void Save() => Save(_learned, _path);
 
         /// <summary>One portal per line, like ref/portals.json.</summary>
-        private static void Save(List<Portal> portals, string path)
+        private static void Save(List<Portal> portals, string path) => Save(portals.Select(p => JsonConvert.SerializeObject(p)), path);
+
+        /// <summary>One JSON value per line, in an array.</summary>
+        private static void Save(IEnumerable<string> lines, string path)
         {
             try
             {
-                var lines = portals.Select(p => JsonConvert.SerializeObject(p));
                 File.WriteAllText(path, "[\n" + string.Join(",\n", lines) + "\n]\n");
             }
             catch (Exception ex)

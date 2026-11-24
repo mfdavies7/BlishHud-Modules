@@ -84,9 +84,15 @@ namespace Bytex.TyriaSearch
         }
 
         private readonly List<Placed> _placed = new List<Placed>();
+        private readonly Func<string, AsyncTexture2D> _renderIcon;
+        // Kept while the tooltip shows: Blish HUD holds them weakly, and asking each frame gave a fresh texture after a
+        // collection, transparent until reloaded, so the coins flickered.
+        private readonly Dictionary<string, AsyncTexture2D> _coinIcons = new Dictionary<string, AsyncTexture2D>();
 
-        public TooltipContent(IEnumerable<TooltipLine> lines)
+        /// <param name="renderIcon">A render service icon by URL (see <see cref="TyriaSearchModule.RenderIcon"/>), for the coins.</param>
+        public TooltipContent(IEnumerable<TooltipLine> lines, Func<string, AsyncTexture2D> renderIcon)
         {
+            _renderIcon = renderIcon;
             Width = ContentWidth;
             int y = 0;
             foreach (var line in lines)
@@ -181,8 +187,8 @@ namespace Bytex.TyriaSearch
                 }
 
                 var iconRect = new Rectangle(line.Indent, placed.Top + placed.IconTop, line.IconSize, line.IconSize);
-                // HasSwapped means a downloading icon has arrived; until then the placeholder shows.
-                if (line.Icon != null && (line.Icon.HasSwapped || line.Placeholder == null)) spriteBatch.DrawOnCtrl(this, line.Icon, iconRect);
+                // Until a downloading icon arrives the placeholder shows, and stays if Blish HUD's download failed.
+                if (TyriaSearchModule.IsLoaded(line.Icon)) spriteBatch.DrawOnCtrl(this, line.Icon, iconRect);
                 else if (line.Placeholder != null) spriteBatch.DrawOnCtrl(this, line.Placeholder, iconRect);
 
                 foreach (var word in placed.Words)
@@ -238,7 +244,10 @@ namespace Bytex.TyriaSearch
                 spriteBatch.DrawStringOnCtrl(this, text, line.Font, new Rectangle(x, top, width + 4, CoinIconSize + 2), Color.White,
                     false, HorizontalAlignment.Left, VerticalAlignment.Middle);
                 x += width + 2;
-                spriteBatch.DrawOnCtrl(this, GameService.Content.GetRenderServiceTexture(icon), new Rectangle(x, top + 1, CoinIconSize, CoinIconSize));
+                // Asked again if Blish HUD's download failed, which gives the module's own download instead.
+                if (!_coinIcons.TryGetValue(icon, out var texture) || TyriaSearchModule.IsErrorTexture(texture))
+                    _coinIcons[icon] = texture = _renderIcon(icon);
+                if (TyriaSearchModule.IsLoaded(texture)) spriteBatch.DrawOnCtrl(this, texture, new Rectangle(x, top + 1, CoinIconSize, CoinIconSize));
                 x += CoinIconSize + 6;
             }
         }
@@ -318,34 +327,75 @@ namespace Bytex.TyriaSearch
         private readonly Gw2Data _data;
         private readonly Func<string> _language;
         private readonly Func<SearchEntry, AsyncTexture2D> _iconFor;
+        private readonly Func<string, AsyncTexture2D> _renderIcon;
         private readonly Func<SearchEntry, Texture2D> _placeholderFor;
         private readonly CancellationToken _ct;
         // By endpoint, id and language. A failed fetch is tried again the next time.
         private readonly Dictionary<(string, int, string), Task<object>> _fetched = new Dictionary<(string, int, string), Task<object>>();
-        // Activation times from the wiki by skill id; the same in every language.
+        // From the wiki, the same in every language: activation times by skill id, and healing coefficients by
+        // whether it's a trait and id.
         private readonly Dictionary<int, Task<double?>> _activationTimes = new Dictionary<int, Task<double?>>();
+        private readonly Dictionary<(bool, int), Task<Dictionary<double, double>>> _coefficients = new Dictionary<(bool, int), Task<Dictionary<double, double>>>();
+
+        /// <summary>What a skill or trait tooltip adds from the wiki, which the API doesn't give.</summary>
+        private sealed class WikiExtras
+        {
+            public static readonly WikiExtras None = new WikiExtras(null, new Dictionary<double, double>());
+
+            /// <summary>A skill's activation time in seconds; null if unknown, 0 for instant skills.</summary>
+            public readonly double? Activation;
+            /// <summary>Healing Power coefficients of healing and barrier facts, by the API's amount (see <see cref="Gw2Data.HealingCoefficientsAsync"/>).</summary>
+            public readonly Dictionary<double, double> Coefficients;
+
+            public WikiExtras(double? activation, Dictionary<double, double> coefficients)
+            {
+                Activation = activation;
+                Coefficients = coefficients;
+            }
+
+            /// <summary>Whether there's anything to add to the tooltip.</summary>
+            public bool Any => Activation > 0 || Coefficients.Count > 0;
+        }
 
         /// <summary>The game's activation time icon (a beige clock like the recharge icon's disc); neither the API nor the wiki has it.</summary>
         private const int ActivationAssetId = 496252;
 
+        /// <param name="renderIcon">A render service icon by URL (see <see cref="TyriaSearchModule.RenderIcon"/>).</param>
         public GameTooltips(Gw2Data data, Func<string> language, Func<SearchEntry, AsyncTexture2D> iconFor,
-            Func<SearchEntry, Texture2D> placeholderFor, CancellationToken ct)
+            Func<string, AsyncTexture2D> renderIcon, Func<SearchEntry, Texture2D> placeholderFor, CancellationToken ct)
         {
             _data = data;
             _language = language;
             _iconFor = iconFor;
+            _renderIcon = renderIcon;
             _placeholderFor = placeholderFor;
             _ct = ct;
         }
 
-        /// <summary>The skill's activation time from the wiki; null if it has none or can't be reached (then asked again next time).</summary>
-        private async Task<double?> ActivationTimeAsync(int skillId)
+        /// <summary>
+        /// A skill's activation time and a skill's or trait's healing coefficients from the wiki. Whatever the wiki
+        /// can't be reached for is left out (and asked again next time).
+        /// </summary>
+        private async Task<WikiExtras> WikiExtrasAsync(SearchEntry entry)
         {
-            Task<double?> task;
-            lock (_activationTimes)
+            int id = Id(entry).Value;
+            bool trait = entry.Kind == EntryKind.Trait;
+            var activation = trait
+                ? Task.FromResult<double?>(null)
+                : FromWikiAsync(_activationTimes, id, () => _data.SkillActivationTimeAsync(id, _ct), $"the activation time of skill {id}", null);
+            var coefficients = FromWikiAsync(_coefficients, (trait, id), () => _data.HealingCoefficientsAsync(id, trait, _ct),
+                $"the healing coefficients of {(trait ? "trait" : "skill")} {id}", WikiExtras.None.Coefficients);
+            return new WikiExtras(await activation, await coefficients);
+        }
+
+        /// <summary>The cached answer for <paramref name="key"/>, fetched if there's none yet or it failed; <paramref name="fallback"/> if it fails.</summary>
+        private async Task<T> FromWikiAsync<TKey, T>(Dictionary<TKey, Task<T>> cache, TKey key, Func<Task<T>> fetch, string what, T fallback)
+        {
+            Task<T> task;
+            lock (cache)
             {
-                if (!_activationTimes.TryGetValue(skillId, out task) || task.IsFaulted || task.IsCanceled)
-                    _activationTimes[skillId] = task = _data.SkillActivationTimeAsync(skillId, _ct);
+                if (!cache.TryGetValue(key, out task) || task.IsFaulted || task.IsCanceled)
+                    cache[key] = task = fetch();
             }
             try
             {
@@ -353,8 +403,8 @@ namespace Bytex.TyriaSearch
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
-                Logger.Debug(ex, $"Couldn't get the activation time of skill {skillId} from the wiki.");
-                return null; // the rest of the tooltip still shows
+                Logger.Debug(ex, $"Couldn't get {what} from the wiki.");
+                return fallback; // the rest of the tooltip still shows
             }
         }
 
@@ -363,8 +413,8 @@ namespace Bytex.TyriaSearch
 
         /// <summary>
         /// A tooltip showing what the search already has while the rest is fetched, then the game's tooltip. Make it only
-        /// when it's about to show (the row is hovered): the fetch starts here. A skill's activation time comes from the
-        /// wiki, which is slower: the tooltip shows without it, then gains it when it arrives.
+        /// when it's about to show (the row is hovered): the fetch starts here. A skill's activation time and healing
+        /// coefficients come from the wiki, which is slower: the tooltip shows without them, then gains them when they arrive.
         /// </summary>
         /// <param name="footer">The search's own information, shown below a rule.</param>
         public Tooltip Create(SearchEntry entry, string footer)
@@ -373,13 +423,13 @@ namespace Bytex.TyriaSearch
             // Effects have everything already; nothing to fetch.
             if (entry.Kind == EntryKind.Effect)
             {
-                _ = new TooltipContent(EffectLines(entry, footer)) { Parent = tooltip };
+                _ = new TooltipContent(EffectLines(entry, footer), _renderIcon) { Parent = tooltip };
                 return tooltip;
             }
 
             bool disposed = false;
             tooltip.Disposed += (_, __) => disposed = true;
-            TooltipContent shown = new TooltipContent(FallbackLines(entry, footer, "Loading the tooltip…")) { Parent = tooltip };
+            TooltipContent shown = new TooltipContent(FallbackLines(entry, footer, "Loading the tooltip…"), _renderIcon) { Parent = tooltip };
             _ = FillAsync();
             return tooltip;
 
@@ -389,16 +439,16 @@ namespace Bytex.TyriaSearch
                 if (disposed) return;
                 shown.Parent = null; // the tooltip resizes to its new content
                 shown.Dispose();
-                shown = new TooltipContent(lines) { Parent = tooltip };
+                shown = new TooltipContent(lines, _renderIcon) { Parent = tooltip };
             });
 
             async Task FillAsync()
             {
-                var activation = entry.Kind == EntryKind.Skill ? ActivationTimeAsync(Id(entry).Value) : null;
-                bool hasActivation = activation?.IsCompleted == true; // known from an earlier hover
+                var wiki = entry.Kind == EntryKind.Skill || entry.Kind == EntryKind.Trait ? WikiExtrasAsync(entry) : null;
+                bool hasWiki = wiki?.Status == TaskStatus.RanToCompletion; // known from an earlier hover
                 try
                 {
-                    Show(await LinesAsync(entry, footer, hasActivation ? activation.Result : null));
+                    Show(await LinesAsync(entry, footer, hasWiki ? wiki.Result : WikiExtras.None));
                 }
                 catch (OperationCanceledException)
                 {
@@ -411,16 +461,20 @@ namespace Bytex.TyriaSearch
                     return;
                 }
 
-                if (activation == null || hasActivation) return;
-                double? seconds = await activation; // never fails; null if the wiki couldn't say
-                if (!(seconds > 0)) return; // instant skills show none
+                if (wiki == null || hasWiki) return;
                 try
                 {
-                    Show(await LinesAsync(entry, footer, seconds)); // the API's part is kept, so this is quick
+                    var extras = await wiki; // fails only when unloading; leaves out what the wiki couldn't say
+                    if (!extras.Any) return; // instant skills show no activation time
+                    Show(await LinesAsync(entry, footer, extras)); // the API's part is kept, so this is quick
                 }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
+                catch (OperationCanceledException)
                 {
-                    Logger.Debug(ex, $"Couldn't add the activation time to the tooltip of {entry.Name}.");
+                    // unloading
+                }
+                catch (Exception ex)
+                {
+                    Logger.Debug(ex, $"Couldn't add the wiki's details to the tooltip of {entry.Name}.");
                 }
             }
         }
@@ -471,8 +525,8 @@ namespace Bytex.TyriaSearch
             (await _data.GetByIdsAsync<T>(endpoint, new[] { id }, language, _ct)).FirstOrDefault()
             ?? throw new InvalidOperationException($"The API has no {endpoint} {id}.");
 
-        /// <param name="activation">A skill's activation time, when known.</param>
-        private async Task<List<TooltipLine>> LinesAsync(SearchEntry entry, string footer, double? activation)
+        /// <param name="wiki">What's known so far from the wiki.</param>
+        private async Task<List<TooltipLine>> LinesAsync(SearchEntry entry, string footer, WikiExtras wiki)
         {
             int id = Id(entry).Value;
             var lines = new List<TooltipLine>();
@@ -480,17 +534,19 @@ namespace Bytex.TyriaSearch
             {
                 case EntryKind.Skill:
                     var skill = await FetchAsync<ApiSkill>("skills", id);
-                    lines.Add(Header(entry, entry.Name, TitleColor, skill.Facts, activation));
+                    lines.Add(Header(entry, entry.Name, TitleColor, skill.Facts, wiki.Activation));
                     AddDescription(lines, skill.Description);
                     if (skill.Initiative > 0) lines.Add(new TooltipLine { SpaceBefore = 4 }.Add($"Initiative: {skill.Initiative}", FactColor));
                     if (skill.Cost > 0) lines.Add(new TooltipLine { SpaceBefore = 4 }.Add($"Energy Cost: {skill.Cost}", FactColor));
-                    AddFacts(lines, skill.Facts);
+                    AddFacts(lines, skill.Facts, wiki.Coefficients);
+                    AddPveNote(lines);
                     break;
                 case EntryKind.Trait:
                     var trait = await FetchAsync<ApiTrait>("traits", id);
                     lines.Add(Header(entry, entry.Name, TitleColor, trait.Facts));
                     AddDescription(lines, trait.Description);
-                    AddFacts(lines, trait.Facts);
+                    AddFacts(lines, trait.Facts, wiki.Coefficients);
+                    AddPveNote(lines);
                     break;
                 default:
                     var item = await FetchAsync<ApiItem>("items", id);
@@ -552,13 +608,14 @@ namespace Bytex.TyriaSearch
             if (line.Runs.Count > 0) lines.Add(line);
         }
 
-        private void AddFacts(List<TooltipLine> lines, List<ApiFact> facts)
+        /// <param name="coefficients">Healing Power coefficients of healing and barrier facts, by amount.</param>
+        private void AddFacts(List<TooltipLine> lines, List<ApiFact> facts, Dictionary<double, double> coefficients)
         {
             bool first = true;
             foreach (var fact in facts ?? new List<ApiFact>())
             {
                 if (fact.Type == "Recharge") continue; // in the header, as in game
-                string text = FactText(fact);
+                string text = FactText(fact, coefficients);
                 if (string.IsNullOrWhiteSpace(text)) continue; // BuffArray facts are empty
                 bool buff = fact.Type == "Buff" || fact.Type == "PrefixedBuff";
                 var line = new TooltipLine { SpaceBefore = first ? 8 : 2, Icon = Texture(fact.Icon), IconCount = buff ? fact.ApplyCount ?? 0 : 0 };
@@ -575,8 +632,12 @@ namespace Bytex.TyriaSearch
             }
         }
 
-        /// <summary>A fact as the game words it. Numbers that depend on the character's stats (damage, healing) are given as the API has them.</summary>
-        private static string FactText(ApiFact f)
+        /// <summary>
+        /// A fact as the game words it. Numbers that depend on the character's stats are shown as how they're worked out,
+        /// since the game's own number is for the character's stats: damage as its power coefficient, and healing and
+        /// barrier as the amount at 0 Healing Power plus the wiki's coefficient (just the amount until that's known).
+        /// </summary>
+        private static string FactText(ApiFact f, Dictionary<double, double> coefficients)
         {
             string text = f.Text;
             string Hits() => f.HitCount > 1 ? $" ({f.HitCount}x)" : "";
@@ -591,7 +652,11 @@ namespace Bytex.TyriaSearch
                 case "HealingAdjust":
                     return $"{text ?? "Heal"}{Hits()}";
                 case "AttributeAdjust":
-                    return $"{text ?? Attribute(f.Target)}: {Number(f.Value ?? 0)}";
+                    // Healing and barrier are AttributeAdjust facts targeting Healing (Power), with the amount at 0 Healing Power.
+                    string adjust = $"{text ?? Attribute(f.Target)}: {Number(f.Value ?? 0)}";
+                    return f.Target == "Healing" && f.Value.HasValue && coefficients.TryGetValue(f.Value.Value, out double coefficient)
+                        ? $"{adjust} + {coefficient.ToString("0.0###", CultureInfo.CurrentCulture)} {Times} Healing Power"
+                        : adjust;
                 case "Number":
                 case "Range":
                     return $"{text}: {Number(f.Value ?? 0)}";
@@ -791,6 +856,10 @@ namespace Bytex.TyriaSearch
 
         // ---- Footer ----
 
+        /// <summary>The API gives skills' and traits' PvE values only; PvP and WvW can differ (game mode splits).</summary>
+        private static void AddPveNote(List<TooltipLine> lines) =>
+            lines.Add(new TooltipLine { SpaceBefore = 6, Font = GameService.Content.DefaultFont12 }.Add("PvE tooltip", MutedColor));
+
         private static void AddFooter(List<TooltipLine> lines, string footer)
         {
             if (string.IsNullOrEmpty(footer)) return;
@@ -836,11 +905,14 @@ namespace Bytex.TyriaSearch
         private static string StripMarkup(string text) =>
             Regex.Replace(Regex.Replace(text, @"<br\s*/?>", " ", RegexOptions.IgnoreCase), @"</?c(=[^>]*)?>", "", RegexOptions.IgnoreCase).Trim();
 
-        private static AsyncTexture2D Texture(string url) => string.IsNullOrEmpty(url) ? null : GameService.Content.GetRenderServiceTexture(url);
+        private AsyncTexture2D Texture(string url) => _renderIcon(url);
 
         private static string Attribute(string id) => id == null ? "" : AttributeNames.TryGetValue(id, out var name) ? name : SplitWords(id);
 
         private static string Number(double value) => value.ToString(value % 1 == 0 ? "N0" : "N2", CultureInfo.CurrentCulture);
+
+        /// <summary>"×", or "x" if the tooltip font has no × character.</summary>
+        private static string Times => GameService.Content.DefaultFont14.GetCharacterRegion('×') != null ? "×" : "x";
 
         private static string Seconds(double seconds) => $"{seconds.ToString("0.##", CultureInfo.CurrentCulture)}s";
 

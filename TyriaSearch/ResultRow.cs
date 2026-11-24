@@ -65,8 +65,8 @@ namespace Bytex.TyriaSearch
             if (MouseOver) spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, bounds, HoverColor);
 
             var iconRect = new Rectangle(8, (Height - IconSize) / 2, IconSize, IconSize);
-            // HasTexture is already true while downloading (it starts as a transparent pixel); HasSwapped means it arrived.
-            if (Icon != null && Icon.HasSwapped) spriteBatch.DrawOnCtrl(this, Icon, iconRect);
+            // The placeholder shows while the icon downloads, and instead of Blish HUD's error texture if that failed.
+            if (TyriaSearchModule.IsLoaded(Icon)) spriteBatch.DrawOnCtrl(this, Icon, iconRect);
             else if (PlaceholderIcon != null) spriteBatch.DrawOnCtrl(this, PlaceholderIcon, iconRect);
 
             int textWidth = Width - TextLeft - 4;
