@@ -36,7 +36,7 @@ Left-click the Waypoint Paste icon at the top left to open the settings, or pres
 
 ## Install
 
-Build `bytex.bh.WaypointPaste.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
+Build `bytex.waypointpaste_<version>.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Legal
 

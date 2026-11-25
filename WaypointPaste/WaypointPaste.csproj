@@ -3,10 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>bytex.bh.WaypointPaste</AssemblyName>
+    <AssemblyName>bytex.waypointpaste</AssemblyName>
     <RootNamespace>Bytex.WaypointPaste</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <BlishHUDModuleFileName>bytex.bh.WaypointPaste</BlishHUDModuleFileName>
+    <!-- The .bhm is named bytex.waypointpaste_<version>, the version read from manifest.json -->
+    <ModuleVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\manifest.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</ModuleVersion>
+    <BlishHUDModuleFileName>bytex.waypointpaste_$(ModuleVersion)</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>

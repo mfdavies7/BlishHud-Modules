@@ -3,10 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>bytex.bh.WikiSearch</AssemblyName>
+    <AssemblyName>bytex.wikisearch</AssemblyName>
     <RootNamespace>Bytex.WikiSearch</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <BlishHUDModuleFileName>bytex.bh.WikiSearch</BlishHUDModuleFileName>
+    <!-- The .bhm is named bytex.wikisearch_<version>, the version read from manifest.json -->
+    <ModuleVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\manifest.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</ModuleVersion>
+    <BlishHUDModuleFileName>bytex.wikisearch_$(ModuleVersion)</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>

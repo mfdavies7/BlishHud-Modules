@@ -92,7 +92,7 @@ Left-click the Tyria Search icon at the top left to open the settings, or press 
 
 ## Install
 
-Build `bytex.bh.TyriaSearch.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
+Build `bytex.tyriasearch_<version>.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Credits
 

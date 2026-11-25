@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "name": "Waypoint Paste",
   "namespace": "bytex.waypointpaste",
-  "package": "bytex.bh.WaypointPaste.dll",
+  "package": "bytex.waypointpaste.dll",
   "version": "1.0.1",
   "url": "https://github.com/mfdavies7/BlishHud-Modules",
   "description": "Press a hotkey to whisper a waypoint chat link to yourself.",

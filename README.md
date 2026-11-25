@@ -20,7 +20,7 @@ dotnet build WaypointPaste -c Release
 dotnet build TyriaSearch -c Release
 ```
 
-Each module is written to `<Module>/bin/Release/bytex.bh.<Module>.bhm`. Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
+Each module is written to `<Module>/bin/Release/bytex.<module>_<version>.bhm` (the version from its `manifest.json`). Copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Credits
 

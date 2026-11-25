@@ -34,7 +34,7 @@ Left-click the Wiki Search icon at the top left to open the settings, or press *
 
 ## Install
 
-Build `bytex.bh.WikiSearch.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
+Build `bytex.wikisearch_<version>.bhm` (see the [main README](../README.md#build)) and copy it into Blish HUD's `modules` folder (`Documents/Guild Wars 2/addons/blishhud/modules`).
 
 ## Legal
 

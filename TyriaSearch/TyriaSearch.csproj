@@ -3,10 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>bytex.bh.TyriaSearch</AssemblyName>
+    <AssemblyName>bytex.tyriasearch</AssemblyName>
     <RootNamespace>Bytex.TyriaSearch</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <BlishHUDModuleFileName>bytex.bh.TyriaSearch</BlishHUDModuleFileName>
+    <!-- The .bhm is named bytex.tyriasearch_<version>, the version read from manifest.json -->
+    <ModuleVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\manifest.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</ModuleVersion>
+    <BlishHUDModuleFileName>bytex.tyriasearch_$(ModuleVersion)</BlishHUDModuleFileName>
   </PropertyGroup>
 
   <ItemGroup>
