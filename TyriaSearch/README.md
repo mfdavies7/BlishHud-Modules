@@ -34,7 +34,7 @@ What clicking and right-clicking do can be changed in the settings.
 
 ### The Map
 
-- **Show on Map** marks a result on the world map and minimap. You can mark several at once. A marker that's off screen sits at the edge, pointing the way.
+- **Show on Map** marks a result on the world map and minimap. You can mark several at once. A marker that's off screen sits at the edge, pointing the way, and each shows how far away it is.
 - **Remove a marker** by right-clicking it and choosing **Remove Icon**, or from the result's menu. **Clear Markers** next to the status line (or the Clear Map Markers Hotkey) removes them all.
 - **Portals:** turn on Show Portals on the World Map to see every zone portal, asura gate, and dungeon, raid and fractal entrance, labelled with where they lead.
 - **New portals:** with Learn New Portals on, when you take a portal Tyria Search doesn't know, it offers to add it, then asks you to go back through for the return portal.
@@ -72,6 +72,8 @@ Left-click the Tyria Search icon at the top left to open the settings, or press 
 - **Zoom Out Map After Opening** (on) – zoom the map all the way out so the marker is on screen. Keep the cursor over the game.
 - **Game's Map Key** (M) – your World Map key from the game's Control Options.
 - **Show on the Minimap** (on) – also show markers and portals on the minimap.
+- **Show Distance on the World Map** (on) – write how far each marker is from you under its name, in game units (the ones skill ranges use). "~" marks an approximate position.
+- **Show Distance on the Minimap** (off) – the same under each marker on the minimap.
 
 ### Portals
 

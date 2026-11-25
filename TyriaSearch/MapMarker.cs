@@ -48,6 +48,12 @@ namespace Bytex.TyriaSearch
         public IReadOnlyList<Portal> Portals = Array.Empty<Portal>();
         public bool ShowPortals;
         public bool ShowOnMinimap;
+        /// <summary>Write each marker's distance from the player under it, on the world map and on the minimap.</summary>
+        public bool ShowDistanceOnMap, ShowDistanceOnMinimap;
+
+        // Continent coordinates are 24 game units (inches, what skill ranges are measured in) apiece.
+        private const double UnitsPerContinentUnit = 24;
+        private static readonly Color DistanceColor = new Color(235, 235, 235);
 
         // Minimap icons are smaller, and edge-pinned markers sit this far inside the compass.
         private const float MinimapIconScale = 0.65f;
@@ -338,12 +344,40 @@ namespace Bytex.TyriaSearch
             _drawn.Add((Inflate(backing, HitMargin), target));
             spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, backing, Color.Black * 0.5f);
             if (icon.HasTexture) spriteBatch.DrawOnCtrl(this, icon, iconRect, Color.White * (offScreen ? 0.8f : 1f));
-            if (view.Minimap) return; // no room for names on the minimap
+
+            // Steady, unlike the name: a number that pulses is hard to read.
+            string distance = (view.Minimap ? ShowDistanceOnMinimap : ShowDistanceOnMap) ? Distance(entry) : null;
+            if (view.Minimap) // no room for names on the minimap
+            {
+                if (distance != null)
+                    spriteBatch.DrawStringOnCtrl(this, distance, GameService.Content.DefaultFont12,
+                        new Rectangle((int)pinned.X - 60, backing.Bottom + 1, 120, 14), DistanceColor,
+                        false, true, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+                return;
+            }
 
             string label = entry.Name + (entry.Approximate ? " (approximate)" : "") + (offScreen ? " (off screen)" : "");
             spriteBatch.DrawStringOnCtrl(this, label, GameService.Content.DefaultFont16,
                 new Rectangle((int)pinned.X - 150, iconRect.Bottom + 4, 300, 20), new Color(255, 230, 120) * pulse,
                 false, true, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+            if (distance != null)
+                spriteBatch.DrawStringOnCtrl(this, distance, GameService.Content.DefaultFont14,
+                    new Rectangle((int)pinned.X - 150, iconRect.Bottom + 24, 300, 18), DistanceColor,
+                    false, true, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+        }
+
+        /// <summary>
+        /// Straight-line distance from the player in game units, e.g. "2,450 away"; "~" in front when the marker's
+        /// position is approximate. Null while Mumble has no position.
+        /// </summary>
+        private static string Distance(SearchEntry entry)
+        {
+            var mumble = GameService.Gw2Mumble;
+            if (!mumble.IsAvailable) return null;
+            var player = mumble.RawClient.PlayerLocationMap; // continent coordinates
+            double dx = entry.X.Value - player.X, dy = entry.Y.Value - player.Y;
+            double units = Math.Sqrt(dx * dx + dy * dy) * UnitsPerContinentUnit;
+            return (entry.Approximate ? "~" : "") + units.ToString("N0") + " away";
         }
 
         private static Rectangle Inflate(Rectangle rect, int by) =>

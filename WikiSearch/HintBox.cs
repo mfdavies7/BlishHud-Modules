@@ -14,9 +14,9 @@ namespace Bytex.WikiSearch
     /// </summary>
     internal class HintBox : Control
     {
-        // The same sizes as Tyria Search's game-style tooltips: a fixed-width content area, a 32 px icon beside the
-        // title in the large font, and the description below in the body font.
-        private const int ContentWidth = 320;
+        // The same sizes as Tyria Search's game-style tooltips: a 32 px icon beside the title in the large font, and
+        // the description below in the body font. The box shrinks to fit its text, wrapping at MaxContentWidth.
+        private const int MaxContentWidth = 320;
         private const int Spacing = 8;
         private const int BorderWidth = 2;
         private const int IconSize = 32;
@@ -48,11 +48,15 @@ namespace Bytex.WikiSearch
             set
             {
                 _description = value;
-                _wrapped = DrawUtil.WrapText(TextFont, _description, ContentWidth);
+                _wrapped = DrawUtil.WrapText(TextFont, _description, MaxContentWidth);
                 _headerHeight = Math.Max(IconSize, TitleFont.LineHeight);
-                int textHeight = (int)Math.Ceiling(TextFont.MeasureString(_wrapped).Height);
+                var textSize = TextFont.MeasureString(_wrapped);
+                int textHeight = (int)Math.Ceiling(textSize.Height);
+                // Only as wide as the header or the longest description line needs, up to MaxContentWidth.
+                int headerWidth = IconSize + IconGap + (int)Math.Ceiling(TitleFont.MeasureString(_title).Width);
+                int contentWidth = Math.Min(MaxContentWidth, Math.Max(headerWidth, (int)Math.Ceiling(textSize.Width)));
                 int inset = BorderWidth + Spacing;
-                Size = new Point(inset * 2 + ContentWidth, inset * 2 + _headerHeight + DescriptionGap + textHeight);
+                Size = new Point(inset * 2 + contentWidth, inset * 2 + _headerHeight + DescriptionGap + textHeight);
             }
         }
 

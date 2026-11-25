@@ -27,7 +27,7 @@ What clicking and right-clicking do can be changed in the settings.
 
 ## The Map
 
-- **Show on Map** marks results on the world map and minimap, as many as you like. A marker that's off screen sits at the edge, pointing the way. Right-click a marker to remove it.
+- **Show on Map** marks results on the world map and minimap, as many as you like. A marker that's off screen sits at the edge, pointing the way, and each shows how far away it is. Right-click a marker to remove it.
 - **Portals on the map:** optionally mark every zone portal, asura gate, and dungeon, raid and fractal entrance, labelled with where they lead.
 - **Learns new portals:** turn on Learn New Portals, take a portal it doesn't know, and it offers to add it, then asks you to go back through for the return portal.
 

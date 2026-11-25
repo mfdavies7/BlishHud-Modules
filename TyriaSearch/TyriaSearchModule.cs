@@ -47,6 +47,7 @@ namespace Bytex.TyriaSearch
         private SettingEntry<bool> _zoomOutMap;
         private SettingEntry<bool> _showPortals;
         private SettingEntry<bool> _showOnMinimap;
+        private SettingEntry<bool> _showDistanceOnMap, _showDistanceOnMinimap;
         private SettingEntry<bool> _learnPortals;
         private SettingEntry<KeyBinding> _gameMapKey;
         private SettingEntry<SearchLanguage> _secondLanguage;
@@ -75,6 +76,7 @@ namespace Bytex.TyriaSearch
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
         private RegisteredCornerIcon _cornerIcon;
         private SettingsUsedWhen _mapOpenSettings; // Keep Search Open / Zoom Out only matter when Show on Map opens the map
+        private SettingsUsedWhen _minimapSettings; // Show Distance on the Minimap only matters with Show on the Minimap
         private StandardWindow _settingsWindow;
         private SearchWindow _window;
         private MapMarker _mapMarker;
@@ -162,6 +164,12 @@ namespace Bytex.TyriaSearch
             _showOnMinimap = settings.DefineSetting("ShowOnMinimap", true,
                 () => "Show on the Minimap",
                 () => "Also draw Show on Map markers on the minimap, and portals when Show Portals on the World Map is on. A marker out of range sits at the minimap's edge, pointing the way.");
+            _showDistanceOnMap = settings.DefineSetting("ShowDistanceOnMap", true,
+                () => "Show Distance on the World Map",
+                () => "Write how far each Show on Map marker is from you under its name on the world map, in game units (the ones skill ranges use). \"~\" marks an approximate position.");
+            _showDistanceOnMinimap = settings.DefineSetting("ShowDistanceOnMinimap", false,
+                () => "Show Distance on the Minimap",
+                () => "Write how far each Show on Map marker is from you under it on the minimap, in game units (the ones skill ranges use).");
             // Saved under its old key, so the choice made with Show Corner Icon carries over.
             _registerCornerIcon = settings.DefineSetting("ShowCornerIcon", true,
                 () => "Register Corner Icon",
@@ -257,7 +265,7 @@ namespace Bytex.TyriaSearch
             new SettingsSection("Search Data", new SettingEntry[] { _secondLanguage, _fullDownloadDays },
                 ("Update Data", "Download all search data again now: places, plus skills, traits, NPCs, events, effects and items when they're on. A few minutes with items. Game updates are handled automatically.", UpdateData),
                 ("Clear Cache", "Delete all saved search data and wiki icons, then download them again. Use it if Update Data doesn't fix missing or wrong results or icons. Searches keep working with the old data until the new data arrives. Learned portals are kept.", ClearCache)),
-            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _keepSearchOpenOnMap, _zoomOutMap, _gameMapKey, _showOnMinimap }),
+            new SettingsSection("World Map", new SettingEntry[] { _clearMarkerKey, _openMapOnShow, _keepSearchOpenOnMap, _zoomOutMap, _gameMapKey, _showOnMinimap, _showDistanceOnMap, _showDistanceOnMinimap }),
             new SettingsSection("Portals", new SettingEntry[] { _showPortals, _learnPortals },
                 ("Forget Learned Portals", "Remove every portal that Learn New Portals added. The bundled portals stay.", ForgetLearnedPortals),
                 ("Forget Ignored Locations", "Ask again about portals at every spot you chose Do Not Ask Again for This Location for.", ForgetIgnoredLocations),
@@ -306,6 +314,7 @@ namespace Bytex.TyriaSearch
                 point => (_portalPanelX.Value, _portalPanelY.Value) = (point.X, point.Y));
             SetPortals();
             _mapOpenSettings = new SettingsUsedWhen(() => _openMapOnShow.Value, _keepSearchOpenOnMap, _zoomOutMap).On(_openMapOnShow);
+            _minimapSettings = new SettingsUsedWhen(() => _showOnMinimap.Value, _showDistanceOnMinimap).On(_showOnMinimap);
             _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
@@ -334,6 +343,8 @@ namespace Bytex.TyriaSearch
             _searchWiki.SettingChanged += SearchWiki_SettingChanged;
             _showPortals.SettingChanged += MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged += MapDrawing_SettingChanged;
+            _showDistanceOnMap.SettingChanged += MapDrawing_SettingChanged;
+            _showDistanceOnMinimap.SettingChanged += MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged += Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged += Info_BuildIdChanged;
             return Task.CompletedTask;
@@ -350,6 +361,8 @@ namespace Bytex.TyriaSearch
         {
             _mapMarker.ShowPortals = _showPortals.Value;
             _mapMarker.ShowOnMinimap = _showOnMinimap.Value;
+            _mapMarker.ShowDistanceOnMap = _showDistanceOnMap.Value;
+            _mapMarker.ShowDistanceOnMinimap = _showDistanceOnMinimap.Value;
         }
 
         private void SetPortals() => _mapMarker.Portals = _portals = _bundledPortals.Concat(_portalLearner.Learned).ToList();
@@ -474,11 +487,14 @@ namespace Bytex.TyriaSearch
             if (_mapMarker != null) _mapMarker.RemoveRequested -= MapMarker_RemoveRequested;
             _showPortals.SettingChanged -= MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
+            _showDistanceOnMap.SettingChanged -= MapDrawing_SettingChanged;
+            _showDistanceOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
             GameService.Overlay.UserLocaleChanged -= Overlay_UserLocaleChanged;
             GameService.Gw2Mumble.Info.BuildIdChanged -= Info_BuildIdChanged;
             _settingsWindow?.Dispose();
             _cornerIcon?.Dispose();
             _mapOpenSettings?.Dispose();
+            _minimapSettings?.Dispose();
             _mapMarker?.Dispose();
             _portalReview?.Dispose();
             _window?.Dispose();
