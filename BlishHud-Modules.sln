@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WaypointPaste", "WaypointPa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TyriaSearch", "TyriaSearch\TyriaSearch.csproj", "{4732F185-438C-449F-862D-D07BF976661A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuickItem", "QuickItem\QuickItem.csproj", "{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{4732F185-438C-449F-862D-D07BF976661A}.Release|x64.Build.0 = Release|Any CPU
 		{4732F185-438C-449F-862D-D07BF976661A}.Release|x86.ActiveCfg = Release|Any CPU
 		{4732F185-438C-449F-862D-D07BF976661A}.Release|x86.Build.0 = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|x64.Build.0 = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Debug|x86.Build.0 = Debug|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|Any CPU.Build.0 = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|x64.ActiveCfg = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|x64.Build.0 = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|x86.ActiveCfg = Release|Any CPU
+		{054ED7A1-54C1-4F69-9D16-7A73A6EDF321}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

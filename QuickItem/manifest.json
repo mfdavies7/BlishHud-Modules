@@ -1,0 +1,21 @@
+{
+  "manifest_version": 1,
+  "name": "Quick Item",
+  "namespace": "bytex.quickitem",
+  "package": "bytex.quickitem.dll",
+  "version": "1.0.0",
+  "url": "https://github.com/mfdavies7/BlishHud-Modules",
+  "description": "Put bars of inventory items anywhere on screen, in layouts for each character; click one, or press its hotkey, to use it. Off in PvP and WvW.",
+  "contributors": [
+    { "name": "Bytex" }
+  ],
+  "dependencies": {
+    "bh.blishhud": "^1.3.0"
+  },
+  "directories": [ "quickitem" ],
+  "api_permissions": {
+    "account": { "optional": true, "details": "To list the items in your bags and shared inventory slots when choosing items." },
+    "characters": { "optional": true, "details": "To list the items in your characters' bags when choosing items." },
+    "inventories": { "optional": true, "details": "To list the items in your bags and shared inventory slots when choosing items." }
+  }
+}

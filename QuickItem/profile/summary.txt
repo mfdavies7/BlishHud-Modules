@@ -1,0 +1,1 @@
+Put bars of inventory items anywhere on screen, in layouts for each character. Click one or press its hotkey to open your inventory and use the item. Off in PvP and WvW.
