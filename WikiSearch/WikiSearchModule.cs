@@ -62,7 +62,9 @@ namespace Bytex.WikiSearch
 
         private HintBox _hint;
         private Texture2D _icon;
-        private Texture2D _iconDisabled;
+        // Drawn at 32 px (the corner icon and the Shift hint), so they get their own 32 px images rather than a scaled 64.
+        private Texture2D _icon32;
+        private Texture2D _iconDisabled32;
         private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
         private bool _busy;
@@ -132,7 +134,8 @@ namespace Bytex.WikiSearch
             GameService.Input.Mouse.LeftMouseButtonPressed += Mouse_LeftMouseButtonPressed;
 
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch.png");
-            _hint = new HintBox(_icon, "Wiki Search", GetHintText())
+            _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch-32.png");
+            _hint = new HintBox(_icon32, "Wiki Search", GetHintText())
             {
                 Parent = GameService.Graphics.SpriteScreen,
                 ZIndex = int.MaxValue,
@@ -141,7 +144,7 @@ namespace Bytex.WikiSearch
             _waitForShiftRelease.SettingChanged += WaitForShiftRelease_SettingChanged;
 
             // Greyed out while Wiki Search is off, so the corner icon shows whether it's on.
-            _iconDisabled = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchDisabled.png");
+            _iconDisabled32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchDisabled-32.png");
             _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, CornerIconTexture(),
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
@@ -194,11 +197,13 @@ namespace Bytex.WikiSearch
             _settingsWindow = null;
             _icon?.Dispose();
             _icon = null;
-            _iconDisabled?.Dispose();
-            _iconDisabled = null;
+            _icon32?.Dispose();
+            _icon32 = null;
+            _iconDisabled32?.Dispose();
+            _iconDisabled32 = null;
         }
 
-        private Texture2D CornerIconTexture() => _enabled.Value ? _icon : _iconDisabled;
+        private Texture2D CornerIconTexture() => _enabled.Value ? _icon32 : _iconDisabled32;
 
         private void Enabled_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
         {

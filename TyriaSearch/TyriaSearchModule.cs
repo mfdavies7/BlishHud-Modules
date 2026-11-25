@@ -72,6 +72,7 @@ namespace Bytex.TyriaSearch
         private const int NoPosition = int.MinValue;
 
         private Texture2D _icon;
+        private Texture2D _icon32; // the corner icon's, drawn at 32 px
         // Shown for results without an icon of their own, by name (npc, item, skill, location, page).
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
         private RegisteredCornerIcon _cornerIcon;
@@ -299,6 +300,7 @@ namespace Bytex.TyriaSearch
             Tooltips = new GameTooltips(_data, () => _indexLanguages[0], IconFor, RenderIcon, BundledIconFor, _unloading.Token);
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
+            _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch-32.png");
             foreach (string name in KindIconNames.Concat(Gw2Data.BundledIconNames).Distinct())
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
@@ -315,7 +317,7 @@ namespace Bytex.TyriaSearch
             SetPortals();
             _mapOpenSettings = new SettingsUsedWhen(() => _openMapOnShow.Value, _keepSearchOpenOnMap, _zoomOutMap).On(_openMapOnShow);
             _minimapSettings = new SettingsUsedWhen(() => _showOnMinimap.Value, _showDistanceOnMinimap).On(_showOnMinimap);
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon32,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
             // The same window as the search window, so the two look alike.
@@ -499,6 +501,7 @@ namespace Bytex.TyriaSearch
             _portalReview?.Dispose();
             _window?.Dispose();
             _icon?.Dispose();
+            _icon32?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
             foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons)) texture.Texture?.Dispose();
             _data?.Dispose();

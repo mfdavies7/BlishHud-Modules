@@ -62,6 +62,7 @@ namespace Bytex.WaypointPaste
         private bool _busy;
 
         private Texture2D _icon;
+        private Texture2D _icon32; // the corner icon's, drawn at 32 px
         private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
 
@@ -145,8 +146,9 @@ namespace Bytex.WaypointPaste
         protected override Task LoadAsync()
         {
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste.png");
+            _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste-32.png");
             // Right-click on release, not press: the button mustn't still be held while keys are typed and the link is clicked.
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon,
+            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon32,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: true, _iconLeftClick, _iconRightClick);
             // The same window as the other modules' settings, so they look alike.
@@ -233,6 +235,8 @@ namespace Bytex.WaypointPaste
             _settingsWindow = null;
             _icon?.Dispose();
             _icon = null;
+            _icon32?.Dispose();
+            _icon32 = null;
         }
 
         private void SetClickPositionKey_Activated(object sender, EventArgs e)
