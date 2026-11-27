@@ -30,6 +30,6 @@ Wiki Search and Waypoint Paste are inspired by KenediaDev's TyrianQoL, Tyria Sea
 
 ## Legal
 
-Wiki Search, Waypoint Paste, Tyria Search and Quick Item are unofficial fan projects. They are not affiliated with, endorsed by or sponsored by ArenaNet or NCSOFT.
+All of these modules are unofficial fan projects. They are not affiliated with, endorsed by or sponsored by ArenaNet or NCSOFT.
 
 © ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, Guild Wars 2, GW2, Heart of Thorns, Path of Fire, End of Dragons, Secrets of the Obscure, Janthir Wilds, Visions of Eternity, and all associated logos, designs, and composite marks are trademarks or registered trademarks of NCSOFT Corporation. All other trademarks are the property of their respective owners.

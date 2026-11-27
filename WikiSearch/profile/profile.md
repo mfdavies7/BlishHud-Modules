@@ -4,10 +4,10 @@ Shift + left-click an item in Guild Wars 2 to open its wiki page in your browser
 
 ## How to Use
 
-1. Hold Shift. A hint next to the cursor shows that a click will search.
+1. Hold Shift. A hint next to the cursor shows that a click will search (it hides while the cursor is over a corner icon or a Blish HUD window).
 2. Left-click an item. Its wiki page opens in your browser.
 
-To shift-click items into chat as usual, turn Wiki Search off with a hotkey or by right-clicking its icon at the top left. The icon is greyed out while Wiki Search is off.
+To shift-click items into chat as usual, turn Wiki Search off with a hotkey or by right-clicking its icon at the top left, or, with Turn Off on Right-Click on, by right-clicking anywhere in the game. The icon is greyed out while Wiki Search is off, and it stays off or on when Blish HUD restarts. While Copy Item Name or Item Destruction is turned on, Wiki Search leaves shift-clicks to them.
 
 ## Features
 
@@ -25,6 +25,7 @@ Left-click the Wiki Search icon at the top left to open its settings, or press *
 | Corner Icon Left / Right Click Action | Open Settings / Toggle Wiki Search | Open Settings, Toggle Wiki Search, Open Wiki (the main page) or Nothing. |
 | Toggle Hotkey | Unset | Turns Wiki Search on or off. |
 | Enabled | On | Turn off to shift-click items into chat normally. |
+| Turn Off on Right-Click | Off | Right-click anywhere in the game to turn Wiki Search off. |
 | Wiki Language | Game Language | Game Language, English, German, French or Spanish. |
 | Overwrite Unsent Chat Text | Off | Also search when chat is already open, replacing any unsent text. That text can't be recovered. |
 | Work When the Map Is Open | On | Off: shift-clicking map points links them as usual. |
@@ -32,6 +33,7 @@ Left-click the Wiki Search icon at the top left to open its settings, or press *
 | Key Press Delay (ms) | 60 | Raise it if the command is sometimes typed wrong. |
 | Wait for Shift Release Before Sending | Off | Turn on if the command goes missing or the link gets replaced. |
 | Show Hint While Holding Shift | On | Shows the hint next to the cursor. |
+| Hide Hint Over Blish HUD Windows | On | Hides the hint over Blish HUD windows, menus and other modules' panels. It always hides over corner icons. |
 
 ## Troubleshooting
 

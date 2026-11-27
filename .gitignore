@@ -4,3 +4,10 @@ obj/
 *.user
 TyriaSearch/Temp/
 /TyriaSearch/art
+/BlishIconManager
+/CopyItemName
+/ItemDestruction
+/MinimapClocks
+/SkipCutscenes
+/ZoomOut
+deploy.ps1

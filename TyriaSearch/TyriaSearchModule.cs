@@ -34,6 +34,7 @@ namespace Bytex.TyriaSearch
     public class TyriaSearchModule : Module
     {
         private static readonly Logger Logger = Logger.GetLogger<TyriaSearchModule>();
+        private const string ModuleName = "Tyria Search";
 
         // Full Download Every (Days): the slider's minimum stands for Every Update and its maximum for Never; otherwise
         // days between full downloads, with game updates in between only fetching what was added.
@@ -73,6 +74,7 @@ namespace Bytex.TyriaSearch
 
         private Texture2D _icon;
         private Texture2D _icon32; // the corner icon's, drawn at 32 px
+        private Texture2D _iconHover32;
         // Shown for results without an icon of their own, by name (npc, item, skill, location, page).
         private readonly Dictionary<string, Texture2D> _fallbackIcons = new Dictionary<string, Texture2D>();
         private RegisteredCornerIcon _cornerIcon;
@@ -119,7 +121,7 @@ namespace Bytex.TyriaSearch
         [ImportingConstructor]
         public TyriaSearchModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters)
         {
-            Blocked.ModuleName = "Tyria Search";
+            Blocked.ModuleName = ModuleName;
         }
 
         internal SearchIndex Index => _index;
@@ -191,10 +193,10 @@ namespace Bytex.TyriaSearch
             _secondLanguage = settings.DefineSetting("SecondLanguage", SearchLanguage.None,
                 () => "Second Search Language",
                 () => "Names are shown in Blish HUD's language (Blish HUD settings, Overlay, Language). Searches also match names in this language, so you can find what guildmates call something. Each language is a separate download.");
-            _fullDownloadDays = settings.DefineSetting("FullDownloadDays", 30,
+            _fullDownloadDays = settings.DefineSlider("FullDownloadDays", 30,
                 () => "Full Download Every (Days)",
-                () => "How often to download all search data again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. Every Update: download everything after each game update instead. Never: only what game updates add, and whatever is missing. Update Data downloads everything now.");
-            _fullDownloadDays.SetRange(EveryUpdate, Never);
+                () => "How often to download all search data again, to pick up renamed items and changes to existing maps. In between, a game update only fetches what was added. Every Update: download everything after each game update instead. Never: only what game updates add, and whatever is missing. Update Data downloads everything now.",
+                EveryUpdate, Never);
             _searchNpcs = settings.DefineSetting("SearchNpcs", true,
                 () => "Search NPCs",
                 () => "Include NPCs from the wiki, with where they are, their nearest waypoint and a map marker. NPC names are in English. About 2 MB from the wiki (a few minutes), downloaded again as often as Full Download Every (Days) says; also downloads English map data if neither search language is English.");
@@ -232,10 +234,10 @@ namespace Bytex.TyriaSearch
             _switchBackToSay = settings.DefineSetting("SwitchBackToSay", false,
                 () => "Switch to /s After Whisper",
                 () => "After Whisper to Yourself, switch chat back to /s, so the next message you type isn't also whispered to yourself. Off: chat stays on the whisper channel.");
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
+            _keyDelayMs = settings.DefineSlider("KeyDelayMs", 60,
                 () => "Key Press Delay (ms)",
-                () => "Time between simulated key presses for Paste into Chat and Whisper to Yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
-            _keyDelayMs.SetRange(20, 250);
+                () => "Time between simulated key presses for Paste into Chat and Whisper to Yourself. Raise it if text is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.",
+                20, 250);
             _leftClick = settings.DefineSetting("LeftClickAction", ResultAction.CopyChatLink,
                 () => "Left-Click a Result",
                 () => "What clicking a result does. When it can't be done for that result (no chat link, or no map position), the wiki page opens instead. Shift-click always shows the menu.");
@@ -301,6 +303,7 @@ namespace Bytex.TyriaSearch
             _wikiIconDirectory = System.IO.Path.Combine(directory, "wiki-icons");
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch.png");
             _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearch-32.png");
+            _iconHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\TyriaSearchHover-32.png");
             foreach (string name in KindIconNames.Concat(Gw2Data.BundledIconNames).Distinct())
                 _fallbackIcons[name] = ModuleParameters.ContentsManager.GetTexture($@"textures\icon-{name}.png");
             _window = new SearchWindow(this, _icon);
@@ -317,9 +320,10 @@ namespace Bytex.TyriaSearch
             SetPortals();
             _mapOpenSettings = new SettingsUsedWhen(() => _openMapOnShow.Value, _keepSearchOpenOnMap, _zoomOutMap).On(_openMapOnShow);
             _minimapSettings = new SettingsUsedWhen(() => _showOnMinimap.Value, _showDistanceOnMinimap).On(_showOnMinimap);
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon32,
+            _cornerIcon = new RegisteredCornerIcon(ModuleParameters.Manifest, _registerCornerIcon, _icon32, _iconHover32,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
+            _cornerIcon.ShowKeybind(_openKey);
             // The same window as the search window, so the two look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -394,7 +398,7 @@ namespace Bytex.TyriaSearch
         {
             _portalLearner.Add(portal);
             if (!isReturn) _returnKind = portal.Kind;
-            ScreenNotification.ShowNotification($"Tyria Search added the portal from {portal.Origin} to {portal.Destination}.");
+            Notify.Show(ModuleName, $"Added the portal from {portal.Origin} to {portal.Destination}.");
         }
 
         // Without the portal there's no return to add.
@@ -407,14 +411,14 @@ namespace Bytex.TyriaSearch
         {
             _portalLearner.Ignore(portal);
             DiscardLearnedPortal(portal, isReturn);
-            ScreenNotification.ShowNotification($"Tyria Search won't ask about this portal on {portal.Origin} again.");
+            Notify.Show(ModuleName, $"Won't ask about this portal on {portal.Origin} again.");
         }
 
         private void IgnorePortalDestination(Portal portal, bool isReturn)
         {
             _portalLearner.IgnoreDestination(portal.DestinationMap);
             DiscardLearnedPortal(portal, isReturn);
-            ScreenNotification.ShowNotification($"Tyria Search won't ask about portals to {portal.DestinationMap} again.");
+            Notify.Show(ModuleName, $"Won't ask about portals to {portal.DestinationMap} again.");
         }
 
         private void ForgetIgnoredDestinations()
@@ -422,11 +426,11 @@ namespace Bytex.TyriaSearch
             int count = _portalLearner.IgnoredDestinations.Count;
             if (count == 0)
             {
-                ScreenNotification.ShowNotification("Tyria Search has no ignored portal destinations.");
+                Notify.Show(ModuleName, "No ignored portal destinations.");
                 return;
             }
             _portalLearner.ForgetIgnoredDestinations();
-            ScreenNotification.ShowNotification($"Tyria Search will ask about portals to {count} ignored destination{(count == 1 ? "" : "s")} again.");
+            Notify.Show(ModuleName, $"Will ask about portals to {count} ignored destination{(count == 1 ? "" : "s")} again.");
         }
 
         private void ForgetIgnoredLocations()
@@ -434,11 +438,11 @@ namespace Bytex.TyriaSearch
             int count = _portalLearner.Ignored.Count;
             if (count == 0)
             {
-                ScreenNotification.ShowNotification("Tyria Search has no ignored portal locations.");
+                Notify.Show(ModuleName, "No ignored portal locations.");
                 return;
             }
             _portalLearner.ForgetIgnored();
-            ScreenNotification.ShowNotification($"Tyria Search will ask about {count} ignored portal location{(count == 1 ? "" : "s")} again.");
+            Notify.Show(ModuleName, $"Will ask about {count} ignored portal location{(count == 1 ? "" : "s")} again.");
         }
 
         private void ForgetLearnedPortals()
@@ -446,11 +450,11 @@ namespace Bytex.TyriaSearch
             int count = _portalLearner.Learned.Count;
             if (count == 0)
             {
-                ScreenNotification.ShowNotification("Tyria Search hasn't learned any portals.");
+                Notify.Show(ModuleName, "No learned portals to forget.");
                 return;
             }
             _portalLearner.Forget();
-            ScreenNotification.ShowNotification($"Tyria Search forgot {count} learned portal{(count == 1 ? "" : "s")}.");
+            Notify.Show(ModuleName, $"Forgot {count} learned portal{(count == 1 ? "" : "s")}.");
         }
 
         protected override void Update(GameTime gameTime)
@@ -502,6 +506,7 @@ namespace Bytex.TyriaSearch
             _window?.Dispose();
             _icon?.Dispose();
             _icon32?.Dispose();
+            _iconHover32?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
             foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons)) texture.Texture?.Dispose();
             _data?.Dispose();
@@ -589,7 +594,7 @@ namespace Bytex.TyriaSearch
                 }
                 await RefreshAsync(force: true, cancel.Token);
             });
-            ScreenNotification.ShowNotification("Tyria Search cleared its cache and is downloading the data again.");
+            Notify.Show(ModuleName, "Cache cleared. Downloading the data again.");
         }
 
         /// <summary>The result's own icon, else a bundled one for its kind.</summary>
@@ -1165,12 +1170,12 @@ namespace Bytex.TyriaSearch
             }
             catch (AbortException ex)
             {
-                ScreenNotification.ShowNotification($"Tyria Search: {ex.Message}", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, ex.Message);
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Chat action failed.");
-                ScreenNotification.ShowNotification("Tyria Search failed. See the Blish HUD log for details.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "Failed. See the Blish HUD log for details.");
             }
             finally
             {
@@ -1223,7 +1228,7 @@ namespace Bytex.TyriaSearch
             }
             catch (AbortException ex)
             {
-                ScreenNotification.ShowNotification($"Tyria Search couldn't open the map: {ex.Message}", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, $"Couldn't open the map: {ex.Message}");
             }
         }
 

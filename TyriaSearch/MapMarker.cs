@@ -7,6 +7,7 @@ using Blish_HUD.Controls;
 using Blish_HUD.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Bytex.ModuleShared;
 
 namespace Bytex.TyriaSearch
 {
@@ -58,8 +59,6 @@ namespace Bytex.TyriaSearch
         // Minimap icons are smaller, and edge-pinned markers sit this far inside the compass.
         private const float MinimapIconScale = 0.65f;
         private const int MinimapEdgeMargin = 10;
-        // Gap between the bottom of the screen and a bottom-right compass, in screen pixels.
-        private const int MinimapBottomGap = 36;
 
         /// <summary>Where a map is drawn and how continent positions land on it.</summary>
         private struct View
@@ -195,14 +194,14 @@ namespace Bytex.TyriaSearch
             var ui = GameService.Gw2Mumble.UI;
             // On a loading screen Mumble stops updating, so IsMapOpen stays true from before it.
             if (ui.MapScale <= 0 || !GameService.GameIntegration.Gw2Instance.IsInGame) return;
-            double unitsPerUiPixel = ui.MapScale * GameService.Graphics.UIScaleMultiplier / GameDpiScale();
+            double unitsPerUiPixel = ui.MapScale * Minimap.PixelsPerUnit();
             View view;
             if (ui.IsMapOpen)
                 view = new View { Bounds = new Rectangle(0, 0, Width, Height), UnitsPerUiPixel = unitsPerUiPixel, EdgeMargin = EdgeMargin, IconScale = CloseZoomScale(ui.MapScale) };
             else if (ShowOnMinimap && (Targets.Count > 0 || ShowPortals))
                 view = new View
                 {
-                    Bounds = MinimapBounds(),
+                    Bounds = Minimap.Bounds(),
                     UnitsPerUiPixel = unitsPerUiPixel,
                     Rotation = ui.IsCompassRotationEnabled ? ui.CompassRotation : 0,
                     Minimap = true,
@@ -231,49 +230,6 @@ namespace Bytex.TyriaSearch
             return 1 + (CloseZoomGrowth - 1) * MathHelper.Clamp((float)t, 0, 1);
         }
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern uint GetDpiForWindow(IntPtr window);
-
-        private static float _dpiScale = 1;
-        private static DateTime _dpiCheckedUtc;
-
-        /// <summary>
-        /// With the game's DPI Scaling option on, it draws the map and compass bigger by the monitor's scale (Windows
-        /// display scaling), but Mumble's map scale and compass size don't include it. 1 with the option off.
-        /// Checked once a second, since the game window can move to another monitor.
-        /// </summary>
-        private static float GameDpiScale()
-        {
-            if (DateTime.UtcNow - _dpiCheckedUtc < TimeSpan.FromSeconds(1)) return _dpiScale;
-            _dpiCheckedUtc = DateTime.UtcNow;
-            float scale = 1;
-            try
-            {
-                var window = GameService.GameIntegration.Gw2Instance.Gw2WindowHandle;
-                if (GameService.GameIntegration.GfxSettings.DpiScaling == true && window != IntPtr.Zero)
-                {
-                    uint dpi = GetDpiForWindow(window);
-                    if (dpi > 0) scale = dpi / 96f;
-                }
-            }
-            catch (Exception) { } // GetDpiForWindow needs Windows 10 1607 or later
-            return _dpiScale = scale;
-        }
-
-        /// <summary>
-        /// The compass in UI units. Mumble gives its size in screen pixels before DPI scaling; it sits at the right edge,
-        /// either at the top or just above the bottom.
-        /// </summary>
-        private static Rectangle MinimapBounds()
-        {
-            var ui = GameService.Gw2Mumble.UI;
-            var screen = GameService.Graphics.SpriteScreen;
-            float scale = GameService.Graphics.UIScaleMultiplier / GameDpiScale();
-            int width = (int)(ui.CompassSize.Width / scale);
-            int height = (int)(ui.CompassSize.Height / scale);
-            int y = ui.IsCompassTopRight ? 0 : screen.Height - height - (int)(MinimapBottomGap / scale);
-            return new Rectangle(screen.Width - width, y, width, height);
-        }
 
         private void PaintPortals(SpriteBatch spriteBatch, View view)
         {

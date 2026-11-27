@@ -99,7 +99,9 @@ namespace Bytex.QuickItem
 
         private Texture2D _icon;
         private Texture2D _icon32;
+        private Texture2D _iconHover32;
         private Texture2D _iconDisabled32;
+        private Texture2D _iconDisabledHover32;
         private Texture2D _depositTexture;
         private AsyncTexture2D _depositIcon;
         private RegisteredCornerIcon _cornerIcon;
@@ -163,25 +165,25 @@ namespace Bytex.QuickItem
             _closeInventory = settings.DefineSetting("CloseInventory", true,
                 () => "Close Inventory Afterwards",
                 () => "Close the inventory again after using an item. An inventory that was already open stays open.");
-            _waitForInventoryMs = settings.DefineSetting("WaitForInventoryMs", 1000,
+            _waitForInventoryMs = settings.DefineSlider("WaitForInventoryMs", 1000,
                 () => "Wait for Inventory (ms)",
-                () => "The longest to wait for the inventory to open. Quick Item carries on as soon as it's fully drawn; raise this if your inventory sometimes takes longer to appear.");
-            _waitForInventoryMs.SetRange(200, 3000);
-            _matchTolerance = settings.DefineSetting("MatchTolerance", 7,
+                () => "The longest to wait for the inventory to open. Quick Item carries on as soon as it's fully drawn; raise this if your inventory sometimes takes longer to appear.",
+                200, 3000);
+            _matchTolerance = settings.DefineSlider("MatchTolerance", 7,
                 () => "Match Tolerance",
-                () => "How different from its icon an item on screen may look and still be used. Raise it if items in your inventory aren't found; lower it if the wrong item is used. Save Search Screenshots shows each search's score.");
-            _matchTolerance.SetRange(1, 30);
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
+                () => "How different from its icon an item on screen may look and still be used. Raise it if items in your inventory aren't found; lower it if the wrong item is used. Save Search Screenshots shows each search's score.",
+                1, 30);
+            _keyDelayMs = settings.DefineSlider("KeyDelayMs", 60,
                 () => "Key Press Delay (ms)",
-                () => "Time between simulated key presses and clicks. Raise it if the inventory doesn't open or the item isn't used. Below one game frame (about 16 ms at 60 FPS) input may be missed.");
-            _keyDelayMs.SetRange(20, 250);
+                () => "Time between simulated key presses and clicks. Raise it if the inventory doesn't open or the item isn't used. Below one game frame (about 16 ms at 60 FPS) input may be missed.",
+                20, 250);
             _scrollInventory = settings.DefineSetting("ScrollInventory", true,
                 () => "Scroll the Inventory",
                 () => "If the item isn't in view, scroll the inventory to look for it, then scroll it back. Quick Item finds the inventory window by the bag at its top left, so keep that on screen.");
-            _scrollNotches = settings.DefineSetting("ScrollNotches", 2,
+            _scrollNotches = settings.DefineSlider("ScrollNotches", 2,
                 () => "Scroll Step (Notches)",
-                () => "Mouse wheel notches per scroll step. Lower it if items further down are skipped; raise it to scroll through large bags faster.");
-            _scrollNotches.SetRange(1, 10);
+                () => "Mouse wheel notches per scroll step. Lower it if items further down are skipped; raise it to scroll through large bags faster.",
+                1, 10);
             _saveScreenshots = settings.DefineSetting("SaveScreenshots", false,
                 () => "Save Search Screenshots",
                 () => "Save a screenshot of each search, with the best match boxed and scored, to see why an item wasn't found. The last 10 are kept. Each use's steps and timings also go in the Blish HUD log.");
@@ -251,16 +253,19 @@ namespace Bytex.QuickItem
 
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\QuickItem.png");
             _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\QuickItem-32.png");
+            _iconHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\QuickItemHover-32.png");
             // Greyed out in PvP and WvW, where Quick Item is off, as Wiki Search's is while it's off.
             _iconDisabled32 = ModuleParameters.ContentsManager.GetTexture(@"textures\QuickItemDisabled-32.png");
+            _iconDisabledHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\QuickItemDisabledHover-32.png");
             _depositTexture = ModuleParameters.ContentsManager.GetTexture(@"textures\DepositMaterialsIcon.png");
             _depositIcon = new AsyncTexture2D(_depositTexture);
             _picker = new ItemPicker(ModuleParameters.Gw2ApiManager, _icon, _depositIcon, _unloading.Token);
             _layoutMenu = new ContextMenuStrip(LayoutMenuItems);
             _inPvp = InPvp();
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, CornerIconTexture(),
+            _cornerIcon = new RegisteredCornerIcon(ModuleParameters.Manifest, _registerCornerIcon, CornerIconTexture(), CornerIconHoverTexture(),
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
+            _cornerIcon.ShowKeybind(_showBarsKey);
             // The same window as the other modules' settings, so they look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -359,7 +364,7 @@ namespace Bytex.QuickItem
             if (pvp != _inPvp)
             {
                 _inPvp = pvp;
-                _cornerIcon.Texture = CornerIconTexture();
+                _cornerIcon.SetTextures(CornerIconTexture(), CornerIconHoverTexture());
                 if (pvp)
                 {
                     _picker?.Hide();
@@ -396,6 +401,7 @@ namespace Bytex.QuickItem
         }
 
         private Texture2D CornerIconTexture() => _inPvp ? _iconDisabled32 : _icon32;
+        private Texture2D CornerIconHoverTexture() => _inPvp ? _iconDisabledHover32 : _iconHover32;
 
         /// <summary>Whether a bar is in use now: in the layout shown, and on this character.</summary>
         private bool Applies(Bar bar) =>
@@ -433,9 +439,13 @@ namespace Bytex.QuickItem
             _icon?.Dispose();
             _icon = null;
             _icon32?.Dispose();
+            _iconHover32?.Dispose();
             _icon32 = null;
+            _iconHover32 = null;
             _iconDisabled32?.Dispose();
+            _iconDisabledHover32?.Dispose();
             _iconDisabled32 = null;
+            _iconDisabledHover32 = null;
             _depositTexture?.Dispose();
             _depositTexture = null;
             _depositIcon = null;

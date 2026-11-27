@@ -6,7 +6,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
 
-namespace Bytex.WikiSearch
+namespace Bytex.ModuleShared
 {
     /// <summary>
     /// Tooltip-style hint that follows the cursor: icon, gold title, description.
@@ -14,8 +14,8 @@ namespace Bytex.WikiSearch
     /// </summary>
     internal class HintBox : Control
     {
-        // The same sizes as Tyria Search's game-style tooltips: a 32 px icon beside the title in the large font, and
-        // the description below in the body font. The box shrinks to fit its text, wrapping at MaxContentWidth.
+        // The same sizes as Tyria Search's and the game's own tooltips: a 32 px icon beside the title in the large
+        // font, and the description below in the body font. The box shrinks to fit its text, wrapping at MaxContentWidth.
         private const int MaxContentWidth = 320;
         private const int Spacing = 8;
         private const int BorderWidth = 2;
@@ -29,17 +29,40 @@ namespace Bytex.WikiSearch
         private static BitmapFont TitleFont => GameService.Content.DefaultFont18;
         private static BitmapFont TextFont => GameService.Content.DefaultFont14;
 
-        private readonly Texture2D _icon;
-        private readonly string _title;
+        // Space between the cursor and the box.
+        private const int CursorOffset = 25;
+
+        private AsyncTexture2D _icon;
+        private string _title;
         private string _description;
         private string _wrapped;
         private int _headerHeight;
 
-        public HintBox(Texture2D icon, string title, string description)
+        public HintBox(AsyncTexture2D icon, string title, string description)
         {
             _icon = icon;
             _title = title;
             Description = description;
+        }
+
+        /// <summary>The picture beside the title, e.g. an item's icon while one is chosen.</summary>
+        public AsyncTexture2D Icon
+        {
+            get => _icon;
+            set => _icon = value;
+        }
+
+        /// <summary>The title's colour: gold, or an item's rarity colour.</summary>
+        public Color TitleColor { get; set; } = ContentService.Colors.Chardonnay;
+
+        public string Title
+        {
+            get => _title;
+            set
+            {
+                _title = value;
+                Description = _description; // the width depends on the title too
+            }
         }
 
         public string Description
@@ -49,18 +72,49 @@ namespace Bytex.WikiSearch
             {
                 _description = value;
                 _wrapped = DrawUtil.WrapText(TextFont, _description, MaxContentWidth);
-                _headerHeight = Math.Max(IconSize, TitleFont.LineHeight);
-                var textSize = TextFont.MeasureString(_wrapped);
-                int textHeight = (int)Math.Ceiling(textSize.Height);
-                // Only as wide as the header or the longest description line needs, up to MaxContentWidth.
-                int headerWidth = IconSize + IconGap + (int)Math.Ceiling(TitleFont.MeasureString(_title).Width);
-                int contentWidth = Math.Min(MaxContentWidth, Math.Max(headerWidth, (int)Math.Ceiling(textSize.Width)));
-                int inset = BorderWidth + Spacing;
-                Size = new Point(inset * 2 + contentWidth, inset * 2 + _headerHeight + DescriptionGap + textHeight);
+                Layout();
             }
         }
 
+        private void Layout()
+        {
+            _headerHeight = Math.Max(IconSize, TitleFont.LineHeight);
+            var textSize = TextFont.MeasureString(_wrapped ?? "");
+            int textHeight = (int)Math.Ceiling(textSize.Height);
+            // Only as wide as the header or the longest description line needs, up to MaxContentWidth.
+            int headerWidth = IconSize + IconGap + (int)Math.Ceiling(TitleFont.MeasureString(_title ?? "").Width);
+            int contentWidth = Math.Min(MaxContentWidth, Math.Max(headerWidth, (int)Math.Ceiling(textSize.Width)));
+            int inset = BorderWidth + Spacing;
+            Size = new Point(inset * 2 + contentWidth, inset * 2 + _headerHeight + DescriptionGap + textHeight);
+        }
+
         protected override CaptureType CapturesInput() => CaptureType.None;
+
+        // Blish Icon Manager draws every corner icon (and its folders) on this one control, which takes the mouse
+        // only over what it draws. Matched by name, as it's another module's class.
+        private const string IconManagerLayer = "Bytex.BlishIconManager.IconLayer";
+
+        /// <summary>
+        /// Whether a hint should hide because the cursor is over Blish HUD: always over a corner icon (Blish HUD's own
+        /// or Blish Icon Manager's), and over any other of its controls (windows, menus, other modules' panels) when
+        /// <paramref name="overWindows"/>. The hint never captures input, so it's never the active control itself.
+        /// </summary>
+        public static bool HideForCursor(bool overWindows)
+        {
+            var active = GameService.Input.Mouse.ActiveControl;
+            if (active == null) return false;
+            return overWindows || active is CornerIcon || active.GetType().FullName == IconManagerLayer;
+        }
+
+        /// <summary>Puts the box beside the cursor, flipped to its other side near the screen's right or bottom edge.</summary>
+        public void PlaceNearCursor()
+        {
+            var mouse = GameService.Input.Mouse.Position;
+            var screen = GameService.Graphics.SpriteScreen;
+            int x = mouse.X + CursorOffset + Width > screen.Width ? mouse.X - CursorOffset - Width : mouse.X + CursorOffset;
+            int y = mouse.Y + CursorOffset + Height > screen.Height ? mouse.Y - CursorOffset - Height : mouse.Y + CursorOffset;
+            Location = new Point(x, y);
+        }
 
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
@@ -70,14 +124,14 @@ namespace Bytex.WikiSearch
             spriteBatch.DrawOnCtrl(this, BackgroundTexture, bounds, new Rectangle(50, 50, bounds.Width, bounds.Height), Color.White);
 
             var iconRect = new Rectangle(inset, inset + (_headerHeight - IconSize) / 2, IconSize, IconSize);
-            spriteBatch.DrawOnCtrl(this, _icon, iconRect);
+            if (_icon != null) spriteBatch.DrawOnCtrl(this, _icon, iconRect);
 
             int titleX = iconRect.Right + IconGap;
             int titleY = inset + (_headerHeight - TitleFont.LineHeight) / 2;
             var titleRect = new Rectangle(titleX, titleY, bounds.Width - titleX, TitleFont.LineHeight);
             int textY = inset + _headerHeight + DescriptionGap;
             var textRect = new Rectangle(inset, textY, bounds.Width - inset, bounds.Height - textY);
-            DrawShadowedString(spriteBatch, _title, TitleFont, titleRect, ContentService.Colors.Chardonnay);
+            DrawShadowedString(spriteBatch, _title, TitleFont, titleRect, TitleColor);
             DrawShadowedString(spriteBatch, _wrapped, TextFont, textRect, Color.White);
 
             DrawBorder(spriteBatch, bounds.Size, Point.Zero, BorderWidth, Color.Black);

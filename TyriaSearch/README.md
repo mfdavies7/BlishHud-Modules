@@ -45,7 +45,7 @@ Left-click the Tyria Search icon at the top left to open the settings, or press 
 
 ### Search Window
 
-- **Register Corner Icon** (on) – show the Tyria Search icon at the top left. Off: open the search with the hotkey.
+- **Register Corner Icon** (on) – show the Tyria Search icon at the top left. Its tooltip shows the Open Search Hotkey in square brackets after its name while one is set. Off: open the search with the hotkey.
 - **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Open Search) – Open Settings, Open Search or Nothing.
 - **Open Search Hotkey** (unset) – shows or hides the search window.
 - **Left-Click a Result** (Copy Chat Link) and **Right-Click a Result** (Show Menu) – also Paste into Chat, Whisper to Yourself, Show on Map, Open Wiki Page, Copy Wiki Command or Toggle Favourite. A result with no chat link or map position opens its wiki page instead.

@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Content;
@@ -19,7 +18,6 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Bytex.ModuleShared;
 using static Bytex.ModuleShared.ChatInput;
-using Keyboard = Blish_HUD.Controls.Intern.Keyboard;
 
 namespace Bytex.WikiSearch
 {
@@ -38,24 +36,20 @@ namespace Bytex.WikiSearch
     public class WikiSearchModule : Module
     {
         private static readonly Logger Logger = Logger.GetLogger<WikiSearchModule>();
-
-        private const int HintCursorOffset = 25;
-
-        // GW2 copies a link in the chat box as its chat code; the [Name] form is matched too in case it doesn't.
-        private static readonly Regex LinkAtEnd = new Regex(@"\[[^\[\]]+\]$");
-
-        // Put on the clipboard before a copy; still there afterwards means nothing was selected.
-        private const string CopyCheckMarker = "Bytex.WikiSearch:empty-copy-check";
+        private const string ModuleName = "Wiki Search";
 
         private SettingEntry<WikiLanguage> _language;
         private SettingEntry<KeyBinding> _toggleKey;
         private SettingEntry<bool> _enabled;
+        private SettingEntry<bool> _turnOffOnRightClick;
         private SettingEntry<bool> _overwriteUnsentText;
         private SettingEntry<bool> _workWithMapOpen;
         private SettingEntry<bool> _returnFocusToGame;
         private SettingEntry<int> _keyDelayMs;
         private SettingEntry<bool> _waitForShiftRelease;
         private SettingEntry<bool> _showHint;
+        private SettingEntry<bool> _hideHintOverWindows;
+        private SettingsUsedWhen _hintSettings;
         private SettingEntry<bool> _registerCornerIcon;
         private SettingEntry<IconAction> _iconLeftClick;
         private SettingEntry<IconAction> _iconRightClick;
@@ -64,7 +58,9 @@ namespace Bytex.WikiSearch
         private Texture2D _icon;
         // Drawn at 32 px (the corner icon and the Shift hint), so they get their own 32 px images rather than a scaled 64.
         private Texture2D _icon32;
+        private Texture2D _iconHover32;
         private Texture2D _iconDisabled32;
+        private Texture2D _iconDisabledHover32;
         private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
         private bool _busy;
@@ -89,7 +85,10 @@ namespace Bytex.WikiSearch
                 () => "Turns Wiki Search on or off.");
             _enabled = settings.DefineSetting("Enabled", true,
                 () => "Enabled",
-                () => "Shift + left-click an item to open its wiki page. Turn off to link items in chat normally.");
+                () => "Shift + left-click an item to open its wiki page. Turn off to link items in chat normally. Kept between sessions.");
+            _turnOffOnRightClick = settings.DefineSetting("TurnOffOnRightClick", false,
+                () => "Turn Off on Right-Click",
+                () => "Right-click anywhere in the game to turn Wiki Search off, as TyrianQoL does. Turn it back on with Toggle Hotkey or the corner icon.");
             _language = settings.DefineSetting("Language", WikiLanguage.GameLanguage,
                 () => "Wiki Language",
                 () => "Which wiki to search. Game Language uses the wiki for your game client's language.");
@@ -102,16 +101,19 @@ namespace Bytex.WikiSearch
             _returnFocusToGame = settings.DefineSetting("ReturnFocusToGame", false,
                 () => "Return to the Game After Searching",
                 () => "Switch back to Guild Wars 2 after the wiki opens in your browser.");
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
+            _keyDelayMs = settings.DefineSlider("KeyDelayMs", 60,
                 () => "Key Press Delay (ms)",
-                () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
-            _keyDelayMs.SetRange(20, 250);
+                () => "Time between simulated key presses. Raise it if the /wiki command is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.",
+                20, 250);
             _waitForShiftRelease = settings.DefineSetting("WaitForShiftRelease", false,
                 () => "Wait for Shift Release Before Sending",
                 () => "Only type the /wiki command after you let go of Shift. Turn on if the command is sometimes missing or the item link gets replaced.");
             _showHint = settings.DefineSetting("ShowHint", true,
                 () => "Show Hint While Holding Shift",
                 () => "Show a hint next to the cursor while Shift is held and a click would open the wiki.");
+            _hideHintOverWindows = settings.DefineSetting("HideHintOverWindows", true,
+                () => "Hide Hint Over Blish HUD Windows",
+                () => "Hide the hint while the cursor is over a Blish HUD window, menu or other module's panel. It always hides over corner icons.");
         }
 
         // Blish HUD's settings page only opens the module's own settings window.
@@ -132,22 +134,27 @@ namespace Bytex.WikiSearch
             _toggleKey.Value.Enabled = true;
             _toggleKey.Value.Activated += ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed += Mouse_LeftMouseButtonPressed;
+            GameService.Input.Mouse.RightMouseButtonReleased += Mouse_RightMouseButtonReleased;
 
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch.png");
             _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearch-32.png");
+            _iconHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchHover-32.png");
             _hint = new HintBox(_icon32, "Wiki Search", GetHintText())
             {
                 Parent = GameService.Graphics.SpriteScreen,
                 ZIndex = int.MaxValue,
                 Visible = false,
             };
+            _hintSettings = new SettingsUsedWhen(() => _showHint.Value, _hideHintOverWindows).On(_showHint);
             _waitForShiftRelease.SettingChanged += WaitForShiftRelease_SettingChanged;
 
             // Greyed out while Wiki Search is off, so the corner icon shows whether it's on.
             _iconDisabled32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchDisabled-32.png");
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, CornerIconTexture(),
+            _iconDisabledHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WikiSearchDisabledHover-32.png");
+            _cornerIcon = new RegisteredCornerIcon(ModuleParameters.Manifest, _registerCornerIcon, CornerIconTexture(), CornerIconHoverTexture(),
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: false, _iconLeftClick, _iconRightClick);
+            _cornerIcon.ShowKeybind(_toggleKey);
             _enabled.SettingChanged += Enabled_SettingChanged;
             // The same window as the other modules' settings, so they look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
@@ -167,18 +174,10 @@ namespace Bytex.WikiSearch
             bool show = _showHint.Value
                         && !_busy
                         && IsShiftDown()
-                        && CanSearchNow();
+                        && CanSearchNow()
+                        && !HintBox.HideForCursor(_hideHintOverWindows.Value);
 
-            if (show)
-            {
-                var mouse = GameService.Input.Mouse.Position;
-                var screen = GameService.Graphics.SpriteScreen;
-                // Flip to the other side of the cursor near the screen's right or bottom edge.
-                int x = mouse.X + HintCursorOffset + _hint.Width > screen.Width ? mouse.X - HintCursorOffset - _hint.Width : mouse.X + HintCursorOffset;
-                int y = mouse.Y + HintCursorOffset + _hint.Height > screen.Height ? mouse.Y - HintCursorOffset - _hint.Height : mouse.Y + HintCursorOffset;
-                _hint.Location = new Point(x, y);
-            }
-
+            if (show) _hint.PlaceNearCursor();
             _hint.Visible = show;
         }
 
@@ -187,8 +186,11 @@ namespace Bytex.WikiSearch
             _toggleKey.Value.Enabled = false;
             _toggleKey.Value.Activated -= ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
+            GameService.Input.Mouse.RightMouseButtonReleased -= Mouse_RightMouseButtonReleased;
             _waitForShiftRelease.SettingChanged -= WaitForShiftRelease_SettingChanged;
             _enabled.SettingChanged -= Enabled_SettingChanged;
+            _hintSettings?.Dispose();
+            _hintSettings = null;
             _hint?.Dispose();
             _hint = null;
             _cornerIcon?.Dispose();
@@ -198,16 +200,21 @@ namespace Bytex.WikiSearch
             _icon?.Dispose();
             _icon = null;
             _icon32?.Dispose();
+            _iconHover32?.Dispose();
             _icon32 = null;
+            _iconHover32 = null;
             _iconDisabled32?.Dispose();
+            _iconDisabledHover32?.Dispose();
             _iconDisabled32 = null;
+            _iconDisabledHover32 = null;
         }
 
         private Texture2D CornerIconTexture() => _enabled.Value ? _icon32 : _iconDisabled32;
+        private Texture2D CornerIconHoverTexture() => _enabled.Value ? _iconHover32 : _iconDisabledHover32;
 
         private void Enabled_SettingChanged(object sender, ValueChangedEventArgs<bool> e)
         {
-            _cornerIcon.Texture = CornerIconTexture();
+            _cornerIcon.SetTextures(CornerIconTexture(), CornerIconHoverTexture());
         }
 
         private void RunIconAction(IconAction action)
@@ -236,7 +243,7 @@ namespace Bytex.WikiSearch
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Couldn't open the wiki.");
-                ScreenNotification.ShowNotification("Wiki Search: Couldn't open the wiki in your browser.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "Couldn't open the wiki in your browser.");
             }
         }
 
@@ -277,7 +284,17 @@ namespace Bytex.WikiSearch
         private void ToggleEnabled()
         {
             _enabled.Value = !_enabled.Value;
-            ScreenNotification.ShowNotification($"Wiki Search {(_enabled.Value ? "enabled" : "disabled")}.");
+            Notify.Show(ModuleName, _enabled.Value ? "On" : "Off");
+        }
+
+        // On release: Blish HUD takes a right press over the game for camera dragging and only raises the release.
+        // Not over Blish HUD's own controls (ActiveControl), so right-clicking the corner icon runs its action instead.
+        private void Mouse_RightMouseButtonReleased(object sender, MouseEventArgs e)
+        {
+            if (!_enabled.Value || !_turnOffOnRightClick.Value || _busy || GameService.Input.Mouse.ActiveControl != null
+                || !GameService.GameIntegration.Gw2Instance.Gw2HasFocus) return;
+            _enabled.Value = false;
+            Notify.Show(ModuleName, "Off");
         }
 
         private void Mouse_LeftMouseButtonPressed(object sender, MouseEventArgs e)
@@ -298,6 +315,7 @@ namespace Bytex.WikiSearch
             var ui = GameService.Gw2Mumble.UI;
             var gw2 = GameService.GameIntegration.Gw2Instance;
             return _enabled.Value
+                   && !ShiftClickClaim.TakenByOther("Wiki Search") // Copy Item Name or Item Destruction is waiting for the click
                    && gw2.IsInGame // not on character select or a loading screen
                    && gw2.Gw2HasFocus
                    && (_workWithMapOpen.Value || !ui.IsMapOpen)
@@ -322,7 +340,7 @@ namespace Bytex.WikiSearch
 
                 if (chatWasOpen)
                 {
-                    var (link, _) = await TakeClickedLinkAsync(delay);
+                    var (link, _) = await ClickedLink.TakeAsync(delay);
                     if (link == null) return; // the click didn't add a link, so it wasn't on an item
 
                     // All the text is selected, so the paste replaces it, including any unsent text.
@@ -351,12 +369,12 @@ namespace Bytex.WikiSearch
             }
             catch (AbortException ex)
             {
-                ScreenNotification.ShowNotification($"Wiki Search: {ex.Message}", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, ex.Message);
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Wiki Search failed.");
-                ScreenNotification.ShowNotification("Wiki Search failed. See the Blish HUD log for details.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "Failed. See the Blish HUD log for details.");
             }
             finally
             {
@@ -375,58 +393,6 @@ namespace Bytex.WikiSearch
             {
                 Logger.Warn(ex, "Couldn't restore the clipboard.");
             }
-        }
-
-        /// <summary>
-        /// GW2 put the link at the cursor, so the text up to the cursor ends with it. Copies that, then the whole chat box,
-        /// to split the link from the rest of the text. Returns a null link (and deselects) if the text before the cursor
-        /// doesn't end with a link; otherwise all the text is left selected.
-        /// </summary>
-        private static async Task<(string link, string otherText)> TakeClickedLinkAsync(int delay)
-        {
-            // Shift+Home selects from the cursor to the start. Stroke would lift Shift, so the keys are sent directly.
-            EnsureSafe(chatOpen: true);
-            Keyboard.Press(VirtualKeyShort.LSHIFT, true);
-            try
-            {
-                await Task.Delay(delay);
-                EnsureSafe(chatOpen: true);
-                Keyboard.Stroke(VirtualKeyShort.HOME, true);
-                await Task.Delay(delay);
-            }
-            finally
-            {
-                Keyboard.Release(VirtualKeyShort.LSHIFT, true);
-            }
-            await Task.Delay(delay);
-
-            string beforeCursor = await CopySelectionAsync(delay);
-            var match = LinkAtEnd.Match(beforeCursor ?? "");
-            if (!match.Success)
-            {
-                Stroke(VirtualKeyShort.END); // deselect, leave the text as it was
-                return (null, null);
-            }
-
-            await CtrlStrokeAsync(VirtualKeyShort.KEY_A, delay);
-            string all = await CopySelectionAsync(delay);
-            if (all == null || !all.StartsWith(beforeCursor, StringComparison.Ordinal))
-            {
-                Stroke(VirtualKeyShort.END);
-                throw new AbortException("Couldn't read the chat box, so nothing was searched. Try again, or raise Key Press Delay in the settings.");
-            }
-
-            return (match.Value, beforeCursor.Substring(0, match.Index) + all.Substring(beforeCursor.Length));
-        }
-
-        /// <summary>Copies the selected chat text (copy, not cut, so nothing is lost); null if nothing is selected.</summary>
-        private static async Task<string> CopySelectionAsync(int delay)
-        {
-            await SetClipboardAsync(CopyCheckMarker);
-            await CtrlStrokeAsync(VirtualKeyShort.KEY_C, delay);
-            await Task.Delay(delay);
-            string copied = await ClipboardUtil.WindowsClipboardService.GetTextAsync();
-            return string.IsNullOrEmpty(copied) || copied == CopyCheckMarker ? null : copied;
         }
 
         private static bool IsShiftDown()

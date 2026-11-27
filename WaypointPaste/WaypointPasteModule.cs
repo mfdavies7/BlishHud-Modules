@@ -33,6 +33,7 @@ namespace Bytex.WaypointPaste
     public class WaypointPasteModule : Module
     {
         private static readonly Logger Logger = Logger.GetLogger<WaypointPasteModule>();
+        private const string ModuleName = "Waypoint Paste";
 
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr window, ref NativePoint point);
@@ -63,6 +64,7 @@ namespace Bytex.WaypointPaste
 
         private Texture2D _icon;
         private Texture2D _icon32; // the corner icon's, drawn at 32 px
+        private Texture2D _iconHover32;
         private RegisteredCornerIcon _cornerIcon;
         private StandardWindow _settingsWindow;
 
@@ -109,25 +111,25 @@ namespace Bytex.WaypointPaste
                 () => "Send a waypoint whisper, hover over its link in chat, then press this to save that spot. Set it again if you move or resize chat.");
             // 0, 0 means not set: the top-left corner of the main screen is never where a chat link lands.
             int left = GetSystemMetrics(SmXVirtualScreen), top = GetSystemMetrics(SmYVirtualScreen);
-            _clickX = settings.DefineSetting("ClickX", 0,
+            _clickX = settings.DefineSlider("ClickX", 0,
                 () => "Click Position X",
-                () => "Screen X position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.");
-            _clickX.SetRange(left, left + GetSystemMetrics(SmCxVirtualScreen) - 1);
-            _clickY = settings.DefineSetting("ClickY", 0,
+                () => "Screen X position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.",
+                left, left + GetSystemMetrics(SmCxVirtualScreen) - 1);
+            _clickY = settings.DefineSlider("ClickY", 0,
                 () => "Click Position Y",
-                () => "Screen Y position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.");
-            _clickY.SetRange(top, top + GetSystemMetrics(SmCyVirtualScreen) - 1);
+                () => "Screen Y position of the chat link, in pixels. Set by Set Click Position Hotkey, or type it in. 0, 0 means not set.",
+                top, top + GetSystemMetrics(SmCyVirtualScreen) - 1);
             _showClickPosition = settings.DefineSetting("ShowClickPosition", false,
                 () => "Show Click Position",
                 () => "Mark the saved click position on screen, to check it's over the chat link. Off: it's still shown for a few seconds after Set Click Position Hotkey is pressed or the position is changed.");
-            _clickWaitMs = settings.DefineSetting("ClickWaitMs", 500,
+            _clickWaitMs = settings.DefineSlider("ClickWaitMs", 500,
                 () => "Wait Before Clicking Link (ms)",
-                () => "Time for the whisper to show up in chat before the link is clicked. Raise it if the click sometimes misses the link.");
-            _clickWaitMs.SetRange(20, 3000);
-            _keyDelayMs = settings.DefineSetting("KeyDelayMs", 60,
+                () => "Time for the whisper to show up in chat before the link is clicked. Raise it if the click sometimes misses the link.",
+                20, 3000);
+            _keyDelayMs = settings.DefineSlider("KeyDelayMs", 60,
                 () => "Key Press Delay (ms)",
-                () => "Time between simulated key presses. Raise it if the whisper is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.");
-            _keyDelayMs.SetRange(20, 250);
+                () => "Time between simulated key presses. Raise it if the whisper is sometimes typed wrong or not sent. Below one game frame (about 16 ms at 60 FPS) keys may be missed.",
+                20, 250);
         }
 
         // Blish HUD's settings page only opens the module's own settings window.
@@ -147,10 +149,12 @@ namespace Bytex.WaypointPaste
         {
             _icon = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste.png");
             _icon32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPaste-32.png");
+            _iconHover32 = ModuleParameters.ContentsManager.GetTexture(@"textures\WaypointPasteHover-32.png");
             // Right-click on release, not press: the button mustn't still be held while keys are typed and the link is clicked.
-            _cornerIcon = new RegisteredCornerIcon(_registerCornerIcon, _icon32,
+            _cornerIcon = new RegisteredCornerIcon(ModuleParameters.Manifest, _registerCornerIcon, _icon32, _iconHover32,
                 () => RunIconAction(_iconLeftClick.Value), () => RunIconAction(_iconRightClick.Value),
                 rightClickOnRelease: true, _iconLeftClick, _iconRightClick);
+            _cornerIcon.ShowKeybind(_pasteKey);
             // The same window as the other modules' settings, so they look alike.
             _settingsWindow = new StandardWindow(AsyncTexture2D.FromAssetId(155997), new Rectangle(25, 26, 560, 640), new Rectangle(40, 50, 540, 590))
             {
@@ -236,7 +240,9 @@ namespace Bytex.WaypointPaste
             _icon?.Dispose();
             _icon = null;
             _icon32?.Dispose();
+            _iconHover32?.Dispose();
             _icon32 = null;
+            _iconHover32 = null;
         }
 
         private void SetClickPositionKey_Activated(object sender, EventArgs e)
@@ -245,7 +251,7 @@ namespace Bytex.WaypointPaste
             _clickX.Value = cursor.X;
             _clickY.Value = cursor.Y;
             _showMarkerUntilUtc = DateTime.UtcNow + MarkerShowTime; // even if the position didn't change
-            ScreenNotification.ShowNotification("Waypoint Paste: Chat link click position saved.");
+            Notify.Show(ModuleName, "Chat link click position saved.");
         }
 
         private void PasteKey_Activated(object sender, EventArgs e) => StartPaste(_autoClickLink.Value, fromIcon: false);
@@ -261,14 +267,14 @@ namespace Bytex.WaypointPaste
             if (!fromIcon && (!gw2.IsInGame || !gw2.Gw2HasFocus)) return;
             if (fromIcon && !gw2.IsInGame)
             {
-                ScreenNotification.ShowNotification("Waypoint Paste: You need to be in game first.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "You need to be in game first.");
                 return;
             }
 
             // Chat must start closed: typing into an open message would mix with the whisper.
             if (GameService.Gw2Mumble.UI.IsTextInputFocused)
             {
-                ScreenNotification.ShowNotification("Waypoint Paste: Close chat first.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "Close chat first.");
                 return;
             }
 
@@ -302,12 +308,12 @@ namespace Bytex.WaypointPaste
             }
             catch (AbortException ex)
             {
-                ScreenNotification.ShowNotification($"Waypoint Paste: {ex.Message}", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, ex.Message);
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Waypoint Paste failed.");
-                ScreenNotification.ShowNotification("Waypoint Paste failed. See the Blish HUD log for details.", ScreenNotification.NotificationType.Warning);
+                Notify.Warning(ModuleName, "Failed. See the Blish HUD log for details.");
             }
             finally
             {

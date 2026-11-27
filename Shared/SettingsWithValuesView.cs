@@ -30,6 +30,7 @@ namespace Bytex.ModuleShared
     /// <summary>
     /// The usual module settings panel, except whole-number sliders also get a box showing their value.
     /// The box can be typed into; the value is applied on Enter or when the box loses focus.
+    /// Sliders defined with <see cref="SliderSettings.DefineSlider"/> also get a Default button.
     /// Blish HUD's own slider view can't be extended, so every setting is laid out here.
     /// Optional buttons go below the settings. Settings can instead be laid out in titled sections.
     /// </summary>
@@ -37,8 +38,9 @@ namespace Bytex.ModuleShared
     {
         private const int RowHeight = 27;
         private const int LabelWidth = 200;
-        private const int TrackBarWidth = 220;
+        private const int TrackBarWidth = 142;
         private const int ValueBoxWidth = 60;
+        private const int DefaultButtonWidth = 72;
 
         private readonly SettingCollection _settings;
         private readonly (string text, string tooltip, Action click)[] _buttons;
@@ -171,7 +173,7 @@ namespace Bytex.ModuleShared
             int extraBoxWidth = named.Count > 0 ? 40 : 0; // taken from the slider, so the row stays the same width
             string Text(int value) => named.TryGetValue(value, out string name) ? name : value.ToString();
 
-            var row = new Panel { Parent = parent, Size = new Point(LabelWidth + TrackBarWidth + ValueBoxWidth + 30, RowHeight) };
+            var row = new Panel { Parent = parent, Size = new Point(LabelWidth + TrackBarWidth + ValueBoxWidth + DefaultButtonWidth + 36, RowHeight) };
             string tooltip = entry.Description;
             // Named ends are left out of the number range: "Every Update, a value from 7 to 365, or Never".
             int low = named.ContainsKey(min) ? min + 1 : min, high = named.ContainsKey(max) ? max - 1 : max;
@@ -218,6 +220,22 @@ namespace Bytex.ModuleShared
                 Enabled = enabled,
             };
 
+            int? defaultValue = SliderSettings.DefaultOf(entry);
+            StandardButton defaultButton = null;
+            if (defaultValue != null)
+            {
+                defaultButton = new StandardButton
+                {
+                    Parent = row,
+                    Text = "Default",
+                    BasicTooltipText = $"Set it back to the default, {Text(defaultValue.Value)}.",
+                    Location = new Point(valueBox.Right + 6, 0),
+                    Size = new Point(DefaultButtonWidth, RowHeight - 1),
+                    Enabled = enabled && entry.Value != defaultValue.Value,
+                };
+                defaultButton.Click += (_, __) => entry.Value = defaultValue.Value;
+            }
+
             void ApplyTyped()
             {
                 string text = valueBox.Text.Trim();
@@ -239,6 +257,7 @@ namespace Bytex.ModuleShared
             {
                 if ((int)Math.Round(trackBar.Value) != e.NewValue) trackBar.Value = Clamp(e.NewValue, min, max);
                 if (!valueBox.Focused) valueBox.Text = Text(e.NewValue);
+                if (defaultButton != null) defaultButton.Enabled = enabled && e.NewValue != defaultValue.Value;
             }
 
             entry.SettingChanged += OnSettingChanged;

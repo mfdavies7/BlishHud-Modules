@@ -46,7 +46,7 @@ Left-click the Quick Item icon at the top left to open the settings, or press **
 
 ### Corner Icon
 
-- **Register Corner Icon** (on) – show the Quick Item icon at the top left. Off: edit the bars with Edit Bars in the settings.
+- **Register Corner Icon** (on) – show the Quick Item icon at the top left. Its tooltip shows the Show or Hide Bars Hotkey in square brackets after its name while one is set. Off: edit the bars with Edit Bars in the settings.
 - **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Edit Bars) – Open Settings, Edit Bars, Show or Hide Bars, Choose Layout (a menu of the layouts) or Nothing.
 
 ### Bars
