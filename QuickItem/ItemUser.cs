@@ -248,8 +248,6 @@ namespace Bytex.QuickItem
                 if (_options.BarAt(x, y)) await HideBarsAsync();
                 await ClickAsync(x, y, clicks: 2);
                 Step("double-clicked");
-                // Back where the player had it, so the inventory doesn't seem to jump around.
-                await ScrollAsync(spot, -scrolled);
                 if (opened && _options.CloseInventory()) await PressInventoryKeyAsync();
             }
             catch (AbortException ex)

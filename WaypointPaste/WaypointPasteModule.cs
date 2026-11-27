@@ -187,6 +187,7 @@ namespace Bytex.WaypointPaste
 
         protected override void Initialize()
         {
+            ModuleLifetime.Begin();
             _pasteKey.Value.Enabled = true;
             _pasteKey.Value.Activated += PasteKey_Activated;
             _setClickPositionKey.Value.Enabled = true;
@@ -225,6 +226,7 @@ namespace Bytex.WaypointPaste
 
         protected override void Unload()
         {
+            ModuleLifetime.End(); // stops any key sequence or download still running
             _pasteKey.Value.Enabled = false;
             _pasteKey.Value.Activated -= PasteKey_Activated;
             _setClickPositionKey.Value.Enabled = false;

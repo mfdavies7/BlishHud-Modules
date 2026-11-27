@@ -2,7 +2,7 @@
 
 Press a hotkey, or click the waypoint icon at the top left, to whisper a waypoint's chat link to your own character. The link shows up in chat, ready to click to travel or to share.
 
-Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL; written from scratch.
+Inspired by the Waypoint Paste feature of KenediaDev's TyrianQoL.
 
 ## How to Use
 

@@ -2,7 +2,7 @@
 
 Shift + left-click an item in Guild Wars 2 to open its wiki page in your browser. It works on anything you can shift-click into chat: items in your inventory, bank and the Trading Post, rewards, skills, and points on the world map.
 
-Inspired by the Wiki Search feature of KenediaDev's TyrianQoL; written from scratch.
+Inspired by the Wiki Search feature of KenediaDev's TyrianQoL.
 
 ## How to Use
 

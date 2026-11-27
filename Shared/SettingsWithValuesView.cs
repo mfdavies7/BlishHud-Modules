@@ -117,32 +117,36 @@ namespace Bytex.ModuleShared
                     WidthSizingMode = SizingMode.Fill,
                     HeightSizingMode = SizingMode.AutoSize,
                 };
-                BuildRow(holder, entry, flow.ContentRegion.Width);
+                // The row's own handlers, let go of when it's rebuilt, so they don't pile up while the view is open.
+                Action unsubscribeRow = BuildRow(holder, entry, flow.ContentRegion.Width);
 
                 void OnDisabledChanged(SettingEntry changed)
                 {
                     if (changed != entry) return;
+                    unsubscribeRow?.Invoke();
                     foreach (var child in holder.Children.ToList()) child.Dispose();
-                    BuildRow(holder, entry, flow.ContentRegion.Width);
+                    unsubscribeRow = BuildRow(holder, entry, flow.ContentRegion.Width);
                 }
 
                 SettingsUsedWhen.DisabledChanged += OnDisabledChanged;
-                _unsubscribe.Add(() => SettingsUsedWhen.DisabledChanged -= OnDisabledChanged);
+                _unsubscribe.Add(() =>
+                {
+                    SettingsUsedWhen.DisabledChanged -= OnDisabledChanged;
+                    unsubscribeRow?.Invoke();
+                    unsubscribeRow = null;
+                });
             }
 
             BuildButtons(flow, buttons);
         }
 
-        private void BuildRow(Container holder, SettingEntry entry, int width)
+        /// <returns>Removes the row's handlers from the setting; null if it has none.</returns>
+        private Action BuildRow(Container holder, SettingEntry entry, int width)
         {
-            if (entry is SettingEntry<int> intEntry)
-            {
-                BuildIntRow(holder, intEntry);
-                return;
-            }
+            if (entry is SettingEntry<int> intEntry) return BuildIntRow(holder, intEntry);
 
             var view = SettingView.FromType(entry, width);
-            if (view == null) return;
+            if (view == null) return null;
             var container = new ViewContainer
             {
                 Parent = holder,
@@ -150,6 +154,7 @@ namespace Bytex.ModuleShared
                 HeightSizingMode = SizingMode.AutoSize,
             };
             container.Show(view);
+            return null; // Blish HUD's own view lets go of the setting when it unloads
         }
 
         private static void BuildButtons(FlowPanel flow, (string text, string tooltip, Action click)[] buttons)
@@ -162,7 +167,7 @@ namespace Bytex.ModuleShared
             }
         }
 
-        private void BuildIntRow(Container parent, SettingEntry<int> entry)
+        private Action BuildIntRow(Container parent, SettingEntry<int> entry)
         {
             var range = entry.GetComplianceRequisite().OfType<IntRangeRangeComplianceRequisite>().FirstOrDefault();
             bool hasRange = range.MaxValue > range.MinValue;
@@ -261,7 +266,7 @@ namespace Bytex.ModuleShared
             }
 
             entry.SettingChanged += OnSettingChanged;
-            _unsubscribe.Add(() => entry.SettingChanged -= OnSettingChanged);
+            return () => entry.SettingChanged -= OnSettingChanged;
         }
 
         private static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(max, value));

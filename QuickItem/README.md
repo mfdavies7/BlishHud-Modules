@@ -32,7 +32,7 @@ Quick Item can press the inventory's **Deposit All Materials** button (the box w
 
 ### Large bags
 
-If the item isn't in view, Quick Item scrolls the inventory to find it: up to the top, then down to the bottom, stopping as soon as it's found, and afterwards scrolls back to where you had it. It finds the inventory window by the bag picture at its top left, so keep that on screen. If the inventory is already open, Quick Item leaves it open, wherever you've moved it. The cursor goes over the inventory only for each turn of the wheel and the double-click; in between it waits in the game window's top right corner, so item tooltips don't cover the icons. When the use is done it goes back where you had it.
+If the item isn't in view, Quick Item scrolls the inventory to find it: up to the top, then down to the bottom, stopping as soon as it's found and leaving it there (if it isn't found, it scrolls back to where you had it). It finds the inventory window by the bag picture at its top left, so keep that on screen. If the inventory is already open, Quick Item leaves it open, wherever you've moved it. The cursor goes over the inventory only for each turn of the wheel and the double-click; in between it waits in the game window's top right corner, so item tooltips don't cover the icons. When the use is done it goes back where you had it.
 
 ### How the item is found
 
@@ -72,7 +72,7 @@ Left-click the Quick Item icon at the top left to open the settings, or press **
 - **Inventory Key** (I) – your game's Inventory key (Options, Control Options).
 - **Close Inventory Afterwards** (on) – close the inventory again if Quick Item opened it.
 - **Wait for Inventory (ms)** (1000, 200–3000) – the longest to wait for the inventory to open. Quick Item carries on as soon as the inventory is fully drawn; raise this if it sometimes takes longer to appear.
-- **Scroll the Inventory** (on) – scroll the inventory to find items that aren't in view, then scroll it back.
+- **Scroll the Inventory** (on) – scroll the inventory to find items that aren't in view.
 - **Scroll Step (Notches)** (2, 1–10) – mouse wheel notches per scroll step. Lower it if items further down are skipped; raise it to get through large bags faster.
 - **Match Tolerance** (7, 1–30) – how different from its icon the item on screen may look. Raise it if items aren't found; lower it if the wrong item is used.
 - **Key Press Delay (ms)** (60, 20–250) – time between simulated key presses and clicks. Raise it if the inventory doesn't open or the item isn't used.
@@ -102,8 +102,7 @@ Build `bytex.quickitem_<version>.bhm` (see the [main README](../README.md#build)
 
 ## Credits
 
-Based on the idea of [Quick Items](https://github.com/tentose/Gw2QuickItem) by Pentose (MIT licence); written from scratch.
-
+Based on the idea of [Quick Items](https://github.com/tentose/Gw2QuickItem) by Pentose (MIT licence).
 ## Legal
 
 Quick Item is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by ArenaNet or NCSOFT.

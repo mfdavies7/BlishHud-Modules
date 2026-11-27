@@ -76,6 +76,7 @@ namespace Bytex.QuickItem
         private SettingEntry<int> _scrollNotches;
 
         private readonly CancellationTokenSource _unloading = new CancellationTokenSource();
+        private KeybindingAssignmentWindow _keyWindow;
         private string _screenshotDirectory;
         private BarStore _store;
         private IconCache _iconCache;
@@ -179,7 +180,7 @@ namespace Bytex.QuickItem
                 20, 250);
             _scrollInventory = settings.DefineSetting("ScrollInventory", true,
                 () => "Scroll the Inventory",
-                () => "If the item isn't in view, scroll the inventory to look for it, then scroll it back. Quick Item finds the inventory window by the bag at its top left, so keep that on screen.");
+                () => "If the item isn't in view, scroll the inventory to look for it. Quick Item finds the inventory window by the bag at its top left, so keep that on screen.");
             _scrollNotches = settings.DefineSlider("ScrollNotches", 2,
                 () => "Scroll Step (Notches)",
                 () => "Mouse wheel notches per scroll step. Lower it if items further down are skipped; raise it to scroll through large bags faster.",
@@ -226,6 +227,7 @@ namespace Bytex.QuickItem
         // Textures and saved files are loaded here rather than in Initialize, as Blish HUD's module guide asks.
         protected override Task LoadAsync()
         {
+            ModuleLifetime.Begin();
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("quickitem");
             _screenshotDirectory = Path.Combine(directory, "screenshots");
             _store = new BarStore(directory);
@@ -409,7 +411,10 @@ namespace Bytex.QuickItem
 
         protected override void Unload()
         {
+            ModuleLifetime.End(); // stops any key sequence or download still running
             _unloading.Cancel();
+            _keyWindow?.Dispose();
+            _keyWindow = null;
             foreach (var key in new[] { _showBarsKey, _nextLayoutKey, _depositKey }) key.Value.Enabled = false;
             _showBarsKey.Value.Activated -= ShowBarsKey_Activated;
             _nextLayoutKey.Value.Activated -= NextLayoutKey_Activated;
@@ -417,6 +422,7 @@ namespace Bytex.QuickItem
             _editBars.SettingChanged -= EditBars_SettingChanged;
             GameService.Graphics.SpriteScreen.Resized -= SpriteScreen_Resized;
             if (_store != null) _store.Changed -= Store_Changed;
+            _store?.Flush();
             ClearHotkeys();
             foreach (var control in _barControls.Values) control.Dispose();
             _barControls.Clear();
@@ -713,7 +719,7 @@ namespace Bytex.QuickItem
                 layout.Modifiers = (int)window.ModifierKeys;
                 _store.Save();
             };
-            window.Show();
+            ShowKeyWindow(window);
         }
 
         public void ClearLayoutHotkey(Layout layout)
@@ -822,6 +828,14 @@ namespace Bytex.QuickItem
                 item.Modifiers = (int)window.ModifierKeys;
                 _store.Save();
             };
+            ShowKeyWindow(window);
+        }
+
+        /// <summary>One hotkey window at a time, so one still open is closed when the module unloads.</summary>
+        private void ShowKeyWindow(KeybindingAssignmentWindow window)
+        {
+            _keyWindow?.Dispose();
+            _keyWindow = window;
             window.Show();
         }
 

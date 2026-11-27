@@ -36,6 +36,7 @@ namespace Bytex.TyriaSearch
         // English map names, as the API gives them; some have stray spaces.
         private readonly HashSet<string> _bundledIgnoredDestinations;
         private readonly List<string> _ignoredDestinations;
+        private readonly Dictionary<string, FileWriter> _writers = new Dictionary<string, FileWriter>();
 
         // The last Mumble update; it stops during loading screens, so these hold the spot before one.
         private int _tick, _mapId;
@@ -264,20 +265,19 @@ namespace Bytex.TyriaSearch
         private void Save() => Save(_learned, _path);
 
         /// <summary>One portal per line, like ref/portals.json.</summary>
-        private static void Save(List<Portal> portals, string path) => Save(portals.Select(p => JsonConvert.SerializeObject(p)), path);
+        private void Save(List<Portal> portals, string path) => Save(portals.Select(p => JsonConvert.SerializeObject(p)), path);
 
-        /// <summary>One JSON value per line, in an array.</summary>
-        private static void Save(IEnumerable<string> lines, string path)
+        /// <summary>One JSON value per line, in an array; written in the background, as portals are learned in Update.</summary>
+        private void Save(IEnumerable<string> lines, string path)
         {
-            try
-            {
-                File.WriteAllText(path, "[\n" + string.Join(",\n", lines) + "\n]\n");
-            }
-            catch (Exception ex)
-            {
-                Blocked.Check(ex, path);
-                Logger.Warn(ex, $"Couldn't save {path}.");
-            }
+            if (!_writers.TryGetValue(path, out var writer)) _writers[path] = writer = new FileWriter(path);
+            writer.Write("[\n" + string.Join(",\n", lines) + "\n]\n");
+        }
+
+        /// <summary>Writes any save still waiting, for Unload.</summary>
+        public void Flush()
+        {
+            foreach (var writer in _writers.Values) writer.Flush();
         }
     }
 }

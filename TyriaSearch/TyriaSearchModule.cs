@@ -295,6 +295,7 @@ namespace Bytex.TyriaSearch
         // Textures and bundled files are loaded here rather than in Initialize, as Blish HUD's module guide asks.
         protected override Task LoadAsync()
         {
+            ModuleLifetime.Begin();
             if (_favourites.Value == null) _favourites.Value = new List<string>();
 
             string directory = ModuleParameters.DirectoriesManager.GetFullDirectoryPath("tyriasearch");
@@ -475,6 +476,7 @@ namespace Bytex.TyriaSearch
 
         protected override void Unload()
         {
+            ModuleLifetime.End(); // stops any key sequence or download still running
             _unloading.Cancel();
             _refreshCancel?.Cancel();
             _openKey.Value.Enabled = false;
@@ -490,6 +492,7 @@ namespace Bytex.TyriaSearch
             foreach (var option in SearchOptions) option.SettingChanged -= SearchOption_SettingChanged;
             _searchWiki.SettingChanged -= SearchWiki_SettingChanged;
             if (_portalLearner != null) _portalLearner.Changed -= PortalLearner_Changed;
+            _portalLearner?.Flush();
             if (_mapMarker != null) _mapMarker.RemoveRequested -= MapMarker_RemoveRequested;
             _showPortals.SettingChanged -= MapDrawing_SettingChanged;
             _showOnMinimap.SettingChanged -= MapDrawing_SettingChanged;
@@ -508,8 +511,12 @@ namespace Bytex.TyriaSearch
             _icon32?.Dispose();
             _iconHover32?.Dispose();
             foreach (var texture in _fallbackIcons.Values) texture.Dispose();
-            foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons)) texture.Texture?.Dispose();
-            _data?.Dispose();
+            // Only the module's own: one that hasn't loaded still holds Blish HUD's shared transparent pixel.
+            foreach (var texture in _wikiIcons.Values.Concat(_discardedWikiIcons))
+                if (texture.HasSwapped) texture.Texture?.Dispose();
+            // A refresh cancelled above may still be finishing a request, so its HttpClient goes once it has stopped.
+            var data = _data;
+            _refreshTask.ContinueWith(_ => data?.Dispose(), TaskScheduler.Default);
         }
 
         private void RunIconAction(IconAction action)
@@ -640,7 +647,8 @@ namespace Bytex.TyriaSearch
         {
             if (_wikiIcons.TryGetValue(url, out var texture)) return texture;
             texture = _wikiIcons[url] = new AsyncTexture2D();
-            _ = LoadWikiIconAsync(url, texture, trim);
+            // Off the update thread: reading the file and decoding the PNG would otherwise run in this frame.
+            _ = Task.Run(() => LoadWikiIconAsync(url, texture, trim));
             return texture;
         }
 
@@ -661,12 +669,18 @@ namespace Bytex.TyriaSearch
                     System.IO.File.WriteAllBytes(file, bytes);
                 }
                 if (_unloading.IsCancellationRequested) return;
+                Texture2D loaded;
                 using (var stream = new System.IO.MemoryStream(bytes))
                 using (var context = GameService.Graphics.LendGraphicsDeviceContext())
+                    loaded = TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream);
+                if (trim) loaded = TrimPadding(loaded);
+                // Unload has already disposed the module's icons, so one finished after it would never be.
+                if (_unloading.IsCancellationRequested)
                 {
-                    var loaded = TextureUtil.FromStreamPremultiplied(context.GraphicsDevice, stream);
-                    texture.SwapTexture(trim ? TrimPadding(context.GraphicsDevice, loaded) : loaded);
+                    loaded.Dispose();
+                    return;
                 }
+                texture.SwapTexture(loaded);
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
@@ -682,13 +696,16 @@ namespace Bytex.TyriaSearch
         /// <summary>
         /// Some wiki icons (the generic Monster Skill one) are a small picture in the middle of a large black or
         /// transparent canvas, so they'd look tiny. Cuts out the square around the picture so it fills the icon's space.
+        /// The graphics device is only borrowed to read and write the pixels, as Blish HUD asks lent jobs to be short;
+        /// the scan in between runs without it.
         /// </summary>
-        private static Texture2D TrimPadding(GraphicsDevice device, Texture2D texture)
+        private static Texture2D TrimPadding(Texture2D texture)
         {
             int width = texture.Width, height = texture.Height;
             if (width < PaddedIconMinSize || height < PaddedIconMinSize) return texture;
             var pixels = new Color[width * height];
-            texture.GetData(pixels);
+            using (GameService.Graphics.LendGraphicsDeviceContext())
+                texture.GetData(pixels);
 
             // Near-black or near-transparent pixels are canvas.
             int left = width, top = height, right = -1, bottom = -1;
@@ -713,8 +730,12 @@ namespace Bytex.TyriaSearch
             var cropped = new Color[size * size];
             for (int y = 0; y < size; y++) Array.Copy(pixels, (startY + y) * width + startX, cropped, y * size, size);
 
-            var trimmed = new Texture2D(device, size, size);
-            trimmed.SetData(cropped);
+            Texture2D trimmed;
+            using (var context = GameService.Graphics.LendGraphicsDeviceContext())
+            {
+                trimmed = new Texture2D(context.GraphicsDevice, size, size);
+                trimmed.SetData(cropped);
+            }
             texture.Dispose();
             return trimmed;
         }
@@ -1108,10 +1129,15 @@ namespace Bytex.TyriaSearch
 
         // ---- Actions ----
 
-        internal void Copy(SearchItem item) => _ = CopyAsync(item, returnToGame: false);
+        internal void Copy(SearchItem item) => Run(CopyAsync(item, returnToGame: false), "Copying");
 
         /// <summary>Enter in the search box: copy the top result and go back to the game, ready to paste.</summary>
-        internal void CopyAndReturnToGame(SearchItem item) => _ = CopyAsync(item, returnToGame: true);
+        internal void CopyAndReturnToGame(SearchItem item) => Run(CopyAsync(item, returnToGame: true), "Copying");
+
+        /// <summary>Lets an action started from the UI run on, logging it if it fails rather than losing the exception.</summary>
+        private static void Run(Task task, string what) =>
+            task.ContinueWith(t => Logger.Warn(t.Exception?.GetBaseException(), $"{what} failed."),
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
         private async Task CopyAsync(SearchItem item, bool returnToGame)
         {
@@ -1133,7 +1159,7 @@ namespace Bytex.TyriaSearch
             if (GameService.GameIntegration.Gw2Instance.Gw2IsRunning) GameService.GameIntegration.Gw2Instance.FocusGw2();
         }
 
-        internal void CopyWikiCommand(SearchItem item) => _ = CopyTextAsync($"/wiki {WikiTerm(item.Entry)}", $"/wiki {WikiTerm(item.Entry)}");
+        internal void CopyWikiCommand(SearchItem item) => Run(CopyTextAsync($"/wiki {WikiTerm(item.Entry)}", $"/wiki {WikiTerm(item.Entry)}"), "Copying");
 
         private async Task<bool> CopyTextAsync(string text, string description)
         {
@@ -1179,8 +1205,15 @@ namespace Bytex.TyriaSearch
             }
             finally
             {
-                if (previousClipboard != null)
-                    await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
+                try
+                {
+                    if (previousClipboard != null)
+                        await ClipboardUtil.WindowsClipboardService.SetTextAsync(previousClipboard);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Couldn't restore the clipboard.");
+                }
                 _busy = false;
             }
         }
@@ -1229,6 +1262,11 @@ namespace Bytex.TyriaSearch
             catch (AbortException ex)
             {
                 Notify.Warning(ModuleName, $"Couldn't open the map: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Opening the map failed.");
+                Notify.Warning(ModuleName, "Couldn't open the map. See the Blish HUD log for details.");
             }
         }
 

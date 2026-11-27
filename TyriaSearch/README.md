@@ -2,7 +2,7 @@
 
 One search box for everything in Tyria: waypoints, points of interest, vistas, renown hearts, hero challenges, mastery points, adventures, NPCs, events, portals, effects, items, skills and traits. Find what you're after by name, map or chat code, then copy, paste or whisper its chat link, or mark it on the map.
 
-Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; written from scratch.
+Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder.
 
 ## How to Use
 

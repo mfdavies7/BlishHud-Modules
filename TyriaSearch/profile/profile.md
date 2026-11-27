@@ -37,7 +37,7 @@ Left-click the Tyria Search icon to open the settings, or press **Settings** on 
 
 ## Credits
 
-Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder; written from scratch. Portal positions are from Tekkit's All-In-One marker pack. NPCs, events, effects and wiki results come from the [Guild Wars 2 Wiki](https://wiki.guildwars2.com).
+Combines ideas from Universal Search, Tyria's GPS, V.E.L.O.C.I.T.Y. and NPC Finder. Portal positions are from Tekkit's All-In-One marker pack. NPCs, events, effects and wiki results come from the [Guild Wars 2 Wiki](https://wiki.guildwars2.com).
 
 Tyria Search is an unofficial fan project, not affiliated with, endorsed by or sponsored by ArenaNet or NCSOFT. © ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, Guild Wars 2, GW2, Heart of Thorns, Path of Fire, End of Dragons, Secrets of the Obscure, Janthir Wilds, Visions of Eternity, and all associated logos, designs, and composite marks are trademarks or registered trademarks of NCSOFT Corporation. All other trademarks are the property of their respective owners.
 

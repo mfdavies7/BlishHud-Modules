@@ -17,6 +17,7 @@ namespace Bytex.ModuleShared
         public static void Show(string moduleName, string message,
             ScreenNotification.NotificationType type = ScreenNotification.NotificationType.Info)
         {
+            if (ModuleLifetime.Ended) return; // a sequence stopped by the module being turned off says nothing
             var lines = Wrap($"{moduleName}: {message}");
             // A new banner appears above the ones already showing, so the last line goes first.
             for (int i = lines.Count - 1; i >= 0; i--) ScreenNotification.ShowNotification(lines[i], type);

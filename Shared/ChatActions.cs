@@ -30,6 +30,7 @@ namespace Bytex.ModuleShared
             // Windows can refuse or undo a focus switch, so ask again until GW2 has kept focus for a few frames.
             for (int attempt = 0; attempt < 3; attempt++)
             {
+                ModuleLifetime.ThrowIfEnded();
                 if (!gw2.Gw2HasFocus) gw2.FocusGw2();
                 if (await WaitAsync(() => gw2.Gw2HasFocus, 1000))
                 {

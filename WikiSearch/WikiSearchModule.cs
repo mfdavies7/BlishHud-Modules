@@ -131,6 +131,7 @@ namespace Bytex.WikiSearch
         // Loads the icon's texture, so it's done here rather than in Initialize, as Blish HUD's module guide asks.
         protected override Task LoadAsync()
         {
+            ModuleLifetime.Begin();
             _toggleKey.Value.Enabled = true;
             _toggleKey.Value.Activated += ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed += Mouse_LeftMouseButtonPressed;
@@ -183,6 +184,7 @@ namespace Bytex.WikiSearch
 
         protected override void Unload()
         {
+            ModuleLifetime.End(); // stops any key sequence or download still running
             _toggleKey.Value.Enabled = false;
             _toggleKey.Value.Activated -= ToggleKey_Activated;
             GameService.Input.Mouse.LeftMouseButtonPressed -= Mouse_LeftMouseButtonPressed;
@@ -364,7 +366,7 @@ namespace Bytex.WikiSearch
                 if (_returnFocusToGame.Value)
                 {
                     await Task.Delay(500);
-                    GameService.GameIntegration.Gw2Instance.FocusGw2();
+                    if (!ModuleLifetime.Ended) GameService.GameIntegration.Gw2Instance.FocusGw2();
                 }
             }
             catch (AbortException ex)

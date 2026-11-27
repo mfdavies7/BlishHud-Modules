@@ -114,7 +114,21 @@ namespace Bytex.QuickItem
             };
             _status.Resized += (_, __) => PlaceResults();
             PlaceResults();
+            _api.SubtokenUpdated += Api_SubtokenUpdated;
         }
+
+        /// <summary>
+        /// Blish HUD gave the module new API permissions (a key added or changed): the items are loaded again, at once if
+        /// the window is showing, as Blish HUD's API guide suggests.
+        /// </summary>
+        private void Api_SubtokenUpdated(object sender, ValueEventArgs<IEnumerable<TokenPermission>> e) => OnUiThread(() =>
+        {
+            if (_unloading.IsCancellationRequested) return;
+            _owned = null;
+            if (!_window.Visible || !_loading.IsCompleted) return;
+            _loading = LoadOwnedAsync();
+            Refresh();
+        });
 
         private void PlaceResults()
         {
@@ -317,7 +331,11 @@ namespace Bytex.QuickItem
             chosen?.Invoke(item);
         }
 
-        public void Dispose() => _window.Dispose();
+        public void Dispose()
+        {
+            _api.SubtokenUpdated -= Api_SubtokenUpdated;
+            _window.Dispose();
+        }
 
         /// <summary>A row in the list: icon, name (in its rarity's colour) and where you have it.</summary>
         private sealed class PickerRow : Control

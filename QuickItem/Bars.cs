@@ -102,7 +102,13 @@ namespace Bytex.QuickItem
         /// <summary>Raised after any change, once it's saved.</summary>
         public event Action Changed;
 
-        public BarStore(string directory) => _path = Path.Combine(directory, "bars.json");
+        private readonly FileWriter _writer;
+
+        public BarStore(string directory)
+        {
+            _path = Path.Combine(directory, "bars.json");
+            _writer = new FileWriter(_path);
+        }
 
         private sealed class SavedFile
         {
@@ -191,14 +197,17 @@ namespace Bytex.QuickItem
             try
             {
                 var file = new SavedFile { Version = FileVersion, ChosenLayout = ChosenLayout, Layouts = Layouts, Bars = Bars };
-                File.WriteAllText(_path, JsonConvert.SerializeObject(file, Formatting.Indented));
+                // Written in the background: this is called from clicks and drags.
+                _writer.Write(JsonConvert.SerializeObject(file, Formatting.Indented));
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Couldn't save bars.json.");
-                Blocked.Check(ex, _path);
             }
             Changed?.Invoke();
         }
+
+        /// <summary>Writes a save still waiting, for Unload.</summary>
+        public void Flush() => _writer.Flush();
     }
 }

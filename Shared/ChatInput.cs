@@ -21,11 +21,12 @@ namespace Bytex.ModuleShared
         public static bool IsSafe(bool chatOpen)
         {
             var gw2 = GameService.GameIntegration.Gw2Instance;
-            return gw2.IsInGame && gw2.Gw2HasFocus && GameService.Gw2Mumble.UI.IsTextInputFocused == chatOpen;
+            return !ModuleLifetime.Ended && gw2.IsInGame && gw2.Gw2HasFocus && GameService.Gw2Mumble.UI.IsTextInputFocused == chatOpen;
         }
 
         public static void EnsureSafe(bool chatOpen)
         {
+            ModuleLifetime.ThrowIfEnded(); // nothing more is sent once the module is turned off
             var gw2 = GameService.GameIntegration.Gw2Instance;
             if (!gw2.Gw2HasFocus) throw new AbortException("Stopped because Guild Wars 2 lost focus.");
             if (!gw2.IsInGame) throw new AbortException("Stopped because you left the game (loading screen?).");
