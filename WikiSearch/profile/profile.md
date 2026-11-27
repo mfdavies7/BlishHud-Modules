@@ -17,7 +17,7 @@ To shift-click items into chat as usual, turn Wiki Search off with a hotkey or b
 
 ## Settings
 
-Left-click the Wiki Search icon at the top left to open its settings, or press **Settings** on the module's page in Blish HUD.
+Left-click the Wiki Search icon at the top left to open its settings, or press **Settings** on the module's page in Blish HUD. Each slider has a box to type its value in and a **Default** button.
 
 | Setting | Default | What it does |
 | --- | --- | --- |

@@ -26,7 +26,7 @@ The item must be in this character's bags, and chat must be closed. If it isn't 
 
 ## Settings
 
-Left-click the Quick Item icon to open the settings, or press **Settings** on the module's page in Blish HUD. They're grouped into Corner Icon, Bars, Layouts and Using Items. The [full settings list](https://github.com/mfdavies7/BlishHud-Modules/blob/main/QuickItem/README.md#settings) describes each one.
+Left-click the Quick Item icon to open the settings, or press **Settings** on the module's page in Blish HUD. Each slider has a box to type its value in and a **Default** button. They're grouped into Corner Icon, Bars, Layouts and Using Items. The [full settings list](https://github.com/mfdavies7/BlishHud-Modules/blob/main/QuickItem/README.md#settings) describes each one.
 
 ## Credits
 

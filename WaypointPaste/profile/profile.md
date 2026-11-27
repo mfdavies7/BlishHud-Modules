@@ -20,6 +20,8 @@ To have the link clicked for you, turn on **Auto-Click Chat Link**, send a whisp
 
 ## Settings
 
+Left-click the Waypoint Paste icon to open the settings, or press **Settings** on the module's page in Blish HUD. Each slider has a box to type its value in and a **Default** button.
+
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Register Corner Icon | On | Shows the Waypoint Paste icon at the top left. |

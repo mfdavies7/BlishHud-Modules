@@ -10,7 +10,7 @@ The first time, the search data is downloaded, which takes a few minutes. You ca
 
 - **Search by map or area:** "Queensdale" lists its landmarks; "Queensdale hero challenge" finds that map's hero challenges.
 - **Search by chat code:** paste a code to see what it is.
-- **Find NPCs by service:** "bank" lists every banker, each with the waypoint nearest to them. "Cooking station" or "crafting station" finds the master craftsmen who stand at them.
+- **Find NPCs by service:** "bank" lists every banker, each with the waypoint nearest to them. NPCs are also found by what stands beside them: "cooking station", "crafting station", "vault", "TP", "repair anvil" or "forge".
 - **Find portals between maps:** "Black Citadel to Lion's Arch", "gate from Hoelbrak".
 - **A second language:** names show in Blish HUD's language, and you can also match names in a second one.
 - **The wiki:** pages from the wiki are listed below the results as you type.
@@ -33,7 +33,7 @@ What clicking and right-clicking do can be changed in the settings.
 
 ## Settings
 
-Left-click the Tyria Search icon to open the settings, or press **Settings** on the module's page in Blish HUD. They're grouped into Search Window, Search Options (which kinds of result to include), Search Data (second language, how often to download), World Map, Portals and Chat. The [full settings list](https://github.com/mfdavies7/BlishHud-Modules/blob/main/TyriaSearch/README.md#settings) describes each one.
+Left-click the Tyria Search icon to open the settings, or press **Settings** on the module's page in Blish HUD. Each slider has a box to type its value in and a **Default** button. They're grouped into Search Window, Search Options (which kinds of result to include), Search Data (second language, how often to download), World Map, Portals and Chat. The [full settings list](https://github.com/mfdavies7/BlishHud-Modules/blob/main/TyriaSearch/README.md#settings) describes each one.
 
 ## Credits
 

@@ -15,7 +15,7 @@ While Copy Item Name or Item Destruction is turned on, Wiki Search leaves shift-
 
 ## Settings
 
-Left-click the Wiki Search icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings.
+Left-click the Wiki Search icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings. Each slider has a box to type its value in, and a **Default** button (greyed out at the default) that puts it back.
 
 - **Register Corner Icon** (on) – show the Wiki Search icon at the top left. Its tooltip shows the Toggle Hotkey in square brackets after its name while one is set.
 - **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Toggle Wiki Search) – Open Settings, Toggle Wiki Search, Open Wiki (the wiki's main page) or Nothing.

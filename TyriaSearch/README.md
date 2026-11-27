@@ -41,7 +41,7 @@ What clicking and right-clicking do can be changed in the settings.
 
 ## Settings
 
-Left-click the Tyria Search icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings.
+Left-click the Tyria Search icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings. Each slider has a box to type its value in, and a **Default** button (greyed out at the default) that puts it back.
 
 ### Search Window
 

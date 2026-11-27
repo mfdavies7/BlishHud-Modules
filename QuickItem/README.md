@@ -42,7 +42,7 @@ If Windows can't provide the game window's own picture (it comes back blank on s
 
 ## Settings
 
-Left-click the Quick Item icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings.
+Left-click the Quick Item icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings. Each slider has a box to type its value in, and a **Default** button (greyed out at the default) that puts it back.
 
 ### Corner Icon
 

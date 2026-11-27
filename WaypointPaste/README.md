@@ -18,7 +18,7 @@ Chat stays on the whisper channel afterwards, so a message you type next also go
 
 ## Settings
 
-Left-click the Waypoint Paste icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings.
+Left-click the Waypoint Paste icon at the top left to open the settings, or press **Settings** on the module's page in Blish HUD's settings. Each slider has a box to type its value in, and a **Default** button (greyed out at the default) that puts it back.
 
 - **Register Corner Icon** (on) – show the Waypoint Paste icon at the top left. Its tooltip shows the Paste Waypoint Hotkey in square brackets after its name while one is set.
 - **Corner Icon Left Click Action** (Open Settings) and **Corner Icon Right Click Action** (Paste and Click Waypoint) – Open Settings, Paste Waypoint, Paste and Click Waypoint (clicks the link only while Auto-Click Chat Link is on) or Nothing.
